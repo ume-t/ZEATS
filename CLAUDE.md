@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - [`docs/01_全体設計.md`](docs/01_全体設計.md) — フェーズ構成・技術スタック・データフロー・JSONスキーマ
 - [`docs/02_詳細設計.md`](docs/02_詳細設計.md) — 各フェーズの実装詳細・関数仕様・未実装部分の設計
+- [`docs/03_Excelフォーマット解析.md`](docs/03_Excelフォーマット解析.md) — 入力Excelの構造・チャネル色コード・パース方針
 
 ## 開発フェーズと現状
 
@@ -27,8 +28,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **チケット採番ロジック**: `app.js` の `assignTickets()` を変更する。
 現状は `{prefix}{3桁ゼロ埋め連番}` 固定（例: `A001`）。
 
+## Python環境
+
+conda仮想環境 `zeats` を使用する。
+
+```bash
+conda run -n zeats python phase2_python/xxx.py
+```
+
+依存パッケージ：`openpyxl`、`reportlab`（zeats環境にインストール済み）
+
 ## 未確定事項
 
-- Excelフォーマット → `phase2_python/excel_importer.py` の実装に必要
-- チケット番号フォーマットルール → `assignTickets()` に反映
-- 座席区分の種類・数 → `CATEGORIES` 配列を更新
+- チケット番号フォーマットルール → `assignTickets()` に反映（現状 `{prefix}{3桁連番}` 固定）
