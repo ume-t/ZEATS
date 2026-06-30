@@ -26,6 +26,14 @@ function buildDefaultLayout() {
 }
 
 // ──────────────────────────────────────────────
+// ドラッグ塗り状態
+// ──────────────────────────────────────────────
+const dragPaint = {
+  active: false,
+  action: null, // 'assign' | 'erase'
+};
+
+// ──────────────────────────────────────────────
 // アプリ状態
 // ──────────────────────────────────────────────
 const state = {
@@ -260,7 +268,20 @@ function renderBlockView(filterText = '') {
 
         applyBlockSeatStyle(seatEl, seatId, seats);
 
-        seatEl.addEventListener('click', () => onBlockSeatClick(seatId, seatEl));
+        seatEl.addEventListener('mousedown', e => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          hideContextMenu();
+          const s = currentSeats();
+          dragPaint.action = (state.activeCategoryId === '__erase__' || s[seatId]?.categoryId)
+            ? 'erase' : 'assign';
+          dragPaint.active = true;
+          applyDragBlock(seatId, seatEl);
+        });
+        seatEl.addEventListener('mouseover', () => {
+          if (!dragPaint.active) return;
+          applyDragBlock(seatId, seatEl);
+        });
         seatEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, seatId, seatEl, true); });
         rowEl.appendChild(seatEl);
       });
@@ -287,16 +308,13 @@ function applyBlockSeatStyle(el, seatId, seats) {
   }
 }
 
-function onBlockSeatClick(seatId, el) {
-  hideContextMenu();
-  const seats = currentSeats();
-  if (state.activeCategoryId === '__erase__' || seats[seatId]?.categoryId) {
+function applyDragBlock(seatId, el) {
+  if (dragPaint.action === 'erase') {
     eraseSeat(seatId);
   } else {
     setSeat(seatId, state.activeCategoryId);
   }
   applyBlockSeatStyle(el, seatId, currentSeats());
-  renderSummary();
 }
 
 // ──────────────────────────────────────────────
@@ -322,7 +340,19 @@ function renderGrid() {
         cell.className = 'seat';
         cell.dataset.seatId = seatId;
         applyGridSeatStyle(cell, seatId);
-        cell.addEventListener('click', () => onGridSeatClick(seatId, cell));
+        cell.addEventListener('mousedown', e => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          hideContextMenu();
+          dragPaint.action = (state.activeCategoryId === '__erase__' || state.seats[seatId]?.categoryId)
+            ? 'erase' : 'assign';
+          dragPaint.active = true;
+          applyDragGrid(seatId, cell);
+        });
+        cell.addEventListener('mouseover', () => {
+          if (!dragPaint.active) return;
+          applyDragGrid(seatId, cell);
+        });
         cell.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, seatId, cell, false); });
       }
       grid.appendChild(cell);
@@ -347,15 +377,13 @@ function applyGridSeatStyle(cell, seatId) {
   }
 }
 
-function onGridSeatClick(seatId, cell) {
-  hideContextMenu();
-  if (state.activeCategoryId === '__erase__' || state.seats[seatId]?.categoryId) {
+function applyDragGrid(seatId, cell) {
+  if (dragPaint.action === 'erase') {
     eraseSeat(seatId);
   } else {
     setSeat(seatId, state.activeCategoryId);
   }
   applyGridSeatStyle(cell, seatId);
-  renderSummary();
 }
 
 // ──────────────────────────────────────────────
@@ -634,6 +662,14 @@ function importWorkJSON(file) {
 // ボタンバインド
 // ──────────────────────────────────────────────
 function bindActions() {
+  // ドラッグ塗りの終了（どこでマウスを離しても集計を更新）
+  document.addEventListener('mouseup', () => {
+    if (!dragPaint.active) return;
+    dragPaint.active = false;
+    dragPaint.action = null;
+    renderSummary();
+  });
+
   document.getElementById('btn-reset-all').addEventListener('click', () => {
     if (!confirm('全ての区分・チケット番号をリセットしますか？')) return;
     if (state.mode === 'import') {
