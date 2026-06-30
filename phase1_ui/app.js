@@ -289,7 +289,8 @@ function applyBlockSeatStyle(el, seatId, seats) {
 
 function onBlockSeatClick(seatId, el) {
   hideContextMenu();
-  if (state.activeCategoryId === '__erase__') {
+  const seats = currentSeats();
+  if (state.activeCategoryId === '__erase__' || seats[seatId]?.categoryId) {
     eraseSeat(seatId);
   } else {
     setSeat(seatId, state.activeCategoryId);
@@ -348,7 +349,7 @@ function applyGridSeatStyle(cell, seatId) {
 
 function onGridSeatClick(seatId, cell) {
   hideContextMenu();
-  if (state.activeCategoryId === '__erase__') {
+  if (state.activeCategoryId === '__erase__' || state.seats[seatId]?.categoryId) {
     eraseSeat(seatId);
   } else {
     setSeat(seatId, state.activeCategoryId);
