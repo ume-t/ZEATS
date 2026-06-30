@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-07-01 — セッション8
+
+### やったこと
+- **Stop hook パス修正**: `.claude/settings.json` の `/home/user/ZEATS` を正しいパスに修正
+- **区分パネルに `?` アイコン追加**: ホバーで操作説明ツールチップを表示（`index.html` / `style.css`）
+- **色つき座席クリックで消去トグル**: `onBlockSeatClick` / `onGridSeatClick` を修正
+- **ドラッグで複数席一括塗り/消去**: `mousedown`+`mouseover` 方式に切り替え、`dragPaint` 状態管理を追加
+- **Shift+クリックで範囲一括塗り/消去**: `shiftAnchor` を追加、DOM順でアンカー〜ターゲット間を適用
+- **1つ戻る（Undo）**: `undoStack` + ジェスチャー単位スナップショット方式、Cmd/Ctrl+Z 対応
+- **1つ進む（Redo）**: `redoStack` 追加、新操作時にクリア、Cmd+Shift+Z / Ctrl+Y 対応
+
+### 結果
+- ドラッグ・Shift+クリック・Undo/Redo すべて正常動作を確認
+- ブロックビュー・手動グリッドの両モードで対応
+
+### 次のアクション
+- 白図面ベースの実運用テスト（実際に座席を塗って Excel/PDF 出力まで通す）
+- dev → main マージを検討
+
+---
+
 ## 2026-07-01 — セッション7
 
 ### やったこと
