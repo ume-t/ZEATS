@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-07-01 — セッション7
+
+### やったこと
+- `phase1_ui/app.js`: 区分ボタンのダブルクリックで色変更機能を追加
+  - `openColorPicker(catId)`: ブラウザネイティブ `<input type="color">` を動的生成・トリガー
+  - `updateCategoryColor(catId, color)`: CATEGORIES更新 → ボタン・集計・座席表示を即時再描画
+  - `applyCatBtnColor(btn, color)`: 色なし（白図面読み込み直後）はデフォルトグレー + `.cat-btn--no-color` クラス
+  - `applyBlockSeatStyle` / `applyGridSeatStyle` / コンテキストメニューの色ドット: `cat?.color || '#888'` フォールバック追加
+- `phase1_ui/style.css`: `.cat-btn--no-color { border: 2px dashed #888 }` で色未設定を視覚化
+
+### 結果
+- 白図面読み込み後: 区分ボタンがダッシュボーダーのグレーで表示
+- ダブルクリックでOSネイティブのカラーピッカーが開き、選択した色がリアルタイムで反映
+- 既存の色付きExcelでも動作確認（リグレッションなし）
+
+### 次のアクション
+- 白図面ベース開発: 座席を塗り終えた後のExcel/PDF出力機能の確認
+- main へのマージを検討
+
+---
+
 ## 2026-07-01 — セッション6
 
 ### やったこと

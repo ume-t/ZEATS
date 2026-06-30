@@ -76,6 +76,12 @@ body {
   box-shadow: 0 0 8px rgba(255,255,255,0.5);
 }
 
+/* 色未設定の区分（白図面読み込み直後など） */
+.cat-btn--no-color {
+  border: 2px dashed #888 !important;
+  opacity: 0.75;
+}
+
 #action-buttons {
   display: flex;
   gap: 6px;

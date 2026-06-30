@@ -66,9 +66,11 @@ function initCategories() {
     btn.className = 'cat-btn';
     btn.dataset.catId = cat.id;
     btn.textContent = cat.name;
-    btn.style.backgroundColor = cat.color;
+    btn.title = 'クリック: 区分選択  ／  ダブルクリック: 色変更';
+    applyCatBtnColor(btn, cat.color);
     if (cat.id === state.activeCategoryId) btn.classList.add('active');
     btn.addEventListener('click', () => setActiveCategory(cat.id));
+    btn.addEventListener('dblclick', e => { e.stopPropagation(); openColorPicker(cat.id, btn); });
     container.appendChild(btn);
   });
 
@@ -79,6 +81,55 @@ function initCategories() {
   eraseBtn.style.backgroundColor = '#555';
   eraseBtn.addEventListener('click', () => setActiveCategory('__erase__'));
   container.appendChild(eraseBtn);
+}
+
+function applyCatBtnColor(btn, color) {
+  if (color) {
+    btn.style.backgroundColor = color;
+    btn.classList.remove('cat-btn--no-color');
+  } else {
+    btn.style.backgroundColor = '#555';
+    btn.classList.add('cat-btn--no-color');
+  }
+}
+
+function openColorPicker(catId, anchorBtn) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  if (!cat) return;
+
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.value = cat.color || '#888888';
+  Object.assign(input.style, { position: 'fixed', opacity: '0', pointerEvents: 'none' });
+  document.body.appendChild(input);
+
+  input.addEventListener('input', e => updateCategoryColor(catId, e.target.value));
+  input.addEventListener('change', e => {
+    updateCategoryColor(catId, e.target.value);
+    document.body.removeChild(input);
+  });
+  // キャンセル（ESCなど）でも要素を除去
+  input.addEventListener('cancel', () => document.body.removeChild(input));
+  input.click();
+}
+
+function updateCategoryColor(catId, color) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  if (!cat) return;
+  cat.color = color;
+
+  const btn = document.querySelector(`.cat-btn[data-cat-id="${CSS.escape(catId)}"]`);
+  if (btn) applyCatBtnColor(btn, color);
+
+  renderSummary();
+
+  if (state.mode === 'import') {
+    renderBlockView(document.getElementById('block-search').value);
+  } else {
+    document.querySelectorAll('.seat[data-seat-id]').forEach(cell =>
+      applyGridSeatStyle(cell, cell.dataset.seatId)
+    );
+  }
 }
 
 function setActiveCategory(id) {
@@ -226,7 +277,8 @@ function applyBlockSeatStyle(el, seatId, seats) {
   const seat = seats[seatId];
   if (seat && seat.categoryId) {
     const cat = CATEGORIES.find(c => c.id === seat.categoryId);
-    el.style.backgroundColor = cat ? cat.color : '#2a2a4a';
+    const color = cat?.color || '#888';
+    el.style.backgroundColor = color;
     el.style.borderColor = 'transparent';
     el.style.color = 'rgba(0,0,0,0.75)';
   } else {
@@ -282,7 +334,8 @@ function applyGridSeatStyle(cell, seatId) {
   const seat = state.seats[seatId];
   if (seat && seat.categoryId) {
     const cat = CATEGORIES.find(c => c.id === seat.categoryId);
-    cell.style.backgroundColor = cat ? cat.color : '#2a2a4a';
+    const color = cat?.color || '#888';
+    cell.style.backgroundColor = color;
     cell.style.borderColor = 'transparent';
     cell.textContent = seat.ticketNo || seatId;
     cell.style.color = 'rgba(0,0,0,0.75)';
@@ -317,7 +370,7 @@ function showContextMenu(x, y, seatId, el, isBlock) {
     const li = document.createElement('li');
     const dot = document.createElement('span');
     dot.className = 'ctx-color-dot';
-    dot.style.backgroundColor = cat.color;
+    dot.style.backgroundColor = cat.color || '#888';
     li.appendChild(dot);
     li.appendChild(document.createTextNode(cat.name));
     li.addEventListener('click', () => {
@@ -388,7 +441,7 @@ function renderSummary() {
     const row = document.createElement('div');
     row.className = 'summary-row';
     row.innerHTML = `
-      <div class="summary-color-dot" style="background:${cat.color}"></div>
+      <div class="summary-color-dot" style="background:${cat.color || '#888'}"></div>
       <span class="summary-name">${cat.name}</span>
       <span class="summary-count">${counts[cat.id] || 0}</span>
     `;
