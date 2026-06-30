@@ -112,6 +112,19 @@ def _find_legend(ws) -> tuple[list[dict], dict[str, str]]:
                 '_count': None,
             })
             seen_ids.add(channel_id)
+        elif rgb and not b_is_count:
+            # 色のみ凡例モード: A列に色あり・B列に枚数なし
+            # 座席セルには色がないため座席割当はされず、区分色のみ取得する
+            hex_color = '#' + rgb[2:]
+            categories.append({
+                'id':     channel_id,
+                'name':   channel_id,
+                'color':  hex_color,
+                '_rgb':   rgb,
+                '_count': None,
+            })
+            color_to_id[rgb] = channel_id
+            seen_ids.add(channel_id)
 
     return categories, color_to_id
 
