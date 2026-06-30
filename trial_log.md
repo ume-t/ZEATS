@@ -5,6 +5,31 @@
 
 ---
 
+## 2026-06-30 — セッション4
+
+### やったこと
+- `phase2_python/server.py` を実装（Issue #3）
+  - Flask を使用（requirements.txt に追加）
+  - `POST /import-excel`：multipart Excel → JSON
+  - `POST /export-excel`：JSON → .xlsx バイナリ
+  - `POST /export-pdf`：JSON → .pdf バイナリ
+  - CORS ヘッダー（`Access-Control-Allow-Origin: *`）
+  - エラー処理（file なし・JSON 不正 → 400）
+  - 一時ファイルを使い finally で確実に削除
+- Flask test client で全エンドポイント + エラー系テスト通過
+- Issue #3 Close、`dev` にプッシュ
+
+### 結果
+- 3エンドポイントすべて正常動作（xlsx/pdf のマジックバイトも確認）
+- `after_this_request` が Flask 3.x で廃止されていたため、
+  メモリ読み込み方式（bytes で返す）に切り替えて解決
+
+### 次のアクション
+- Issue #1〜#3 完了済み → dev → main マージ（ユーザーの指示待ち）
+- Issue #4 Electron 化の実装
+
+---
+
 ## 2026-06-30 — セッション3
 
 ### やったこと
