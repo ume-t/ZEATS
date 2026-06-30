@@ -5,6 +5,30 @@
 
 ---
 
+## 2026-07-01 — セッション9
+
+### やったこと
+- **区分色設定のExcel保存機能** を実装（Issue手動作成依頼中）
+  - `phase2_python/color_saver.py`（新規）: `apply_colors_to_excel(src, dst, color_map)` — 元Excelをコピーし、A列の区分名セルに PatternFill で色を適用
+  - `phase2_python/server.py`:
+    - `_last_imported` グローバル変数で `/import-excel` 後のファイルパスを保持（セッション中保存）
+    - `POST /save-colors` 追加: `{colors: {区分名: '#RRGGBB'}}` → タイムスタンプ付き `.xlsx` ダウンロード
+  - `phase1_ui/index.html`: `#electron-buttons` に「区分色をExcelに保存」ボタン追加
+  - `phase1_ui/app.js`: `bindElectronButtons` にバインド追加 + `saveColorsToExcel(serverUrl)` 実装
+
+### 結果
+- `color_saver.py` 単体テスト（`_hex_to_argb` / `apply_colors_to_excel`）: OK
+- `server.py` ルート確認: `/save-colors` が正しく登録されていることを確認
+
+### 次のアクション
+- Electronアプリを起動して実動作確認
+  1. 白図面Excelをインポート
+  2. 区分ボタンをダブルクリックして色を設定
+  3. 「区分色をExcelに保存」をクリック → タイムスタンプ付き xlsx がダウンロードされることを確認
+  4. ダウンロードした xlsx を Excel で開き、凡例セルに色が付いていることを確認
+
+---
+
 ## 2026-07-01 — セッション8
 
 ### やったこと

@@ -842,6 +842,9 @@ function bindElectronButtons(serverUrl) {
     if (file) await importExcelFromServer(file, serverUrl);
   });
 
+  document.getElementById('btn-save-colors').addEventListener('click', () =>
+    saveColorsToExcel(serverUrl)
+  );
   document.getElementById('btn-export-excel').addEventListener('click', () =>
     exportFromServer(serverUrl, 'excel')
   );
@@ -926,6 +929,46 @@ async function exportFromServer(serverUrl, type) {
     showToast(`${label}を出力しました`);
   } catch (err) {
     alert(`出力に失敗しました: ${err.message}`);
+  }
+}
+
+async function saveColorsToExcel(serverUrl) {
+  if (state.mode !== 'import') {
+    alert('区分色のExcel保存はExcelインポートモードでのみ使用できます。\nまず「Excelを直接インポート」でファイルを読み込んでください。');
+    return;
+  }
+  const colors = {};
+  CATEGORIES.forEach(cat => {
+    if (cat.color) colors[cat.id] = cat.color;
+  });
+  if (Object.keys(colors).length === 0) {
+    alert('色が設定されている区分がありません。\n区分ボタンをダブルクリックして色を設定してください。');
+    return;
+  }
+  try {
+    showToast('区分色をExcelに保存中...');
+    const res = await fetch(`${serverUrl}/save-colors`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ colors }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const blob        = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match       = disposition.match(/filename="?([^"]+)"?/);
+    const filename    = match ? match[1] : 'colors.xlsx';
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('区分色をExcelに保存しました');
+  } catch (err) {
+    alert('保存に失敗しました: ' + err.message);
   }
 }
 
