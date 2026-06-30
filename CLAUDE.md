@@ -10,6 +10,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [`docs/02_詳細設計.md`](docs/02_詳細設計.md) — 各フェーズの実装詳細・関数仕様・未実装部分の設計
 - [`docs/03_Excelフォーマット解析.md`](docs/03_Excelフォーマット解析.md) — 入力Excelの構造・チャネル色コード・パース方針
 
+## ブランチ運用
+
+| ブランチ | 用途 |
+|---------|------|
+| `main` | 安定版。動作確認済みのものだけ置く |
+| `dev` | 普段の作業・試行錯誤はここ |
+
+**Claude は常に `dev` ブランチで作業すること。**
+`main` へのマージはユーザーが「main にマージして」と指示したときにPRを作成する。
+マージ方法は通常マージ（fast-forward なし）を使用する。
+
 ## 進捗管理
 
 ### GitHub Issues — タスクの完了/未完了管理
