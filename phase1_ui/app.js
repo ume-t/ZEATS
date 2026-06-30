@@ -72,7 +72,7 @@ function undo() {
   }
   renderSummary();
   updateUndoButton();
-  showToast('元に戻しました');
+  showToast('1つ戻りました');
 }
 
 // ──────────────────────────────────────────────
