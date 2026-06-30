@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/user/ZEATS && git add trial_log.md && git diff --cached --quiet || (git commit -m 'chore: update trial_log [auto]' && git push -u origin $(git branch --show-current))",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -12,11 +12,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 進捗管理
 
-タスクの進捗は **GitHub Issues** で管理する。
+### GitHub Issues — タスクの完了/未完了管理
 https://github.com/ume-t/ZEATS/issues
 
 作業開始時にIssueをOpenのまま着手し、完了したらCloseする。
 未完了タスクの一覧・優先順位・依存関係はIssueを参照すること。
+
+### trial_log.md — セッション日誌（文脈の引き継ぎ）
+
+**セッション終了前に必ず `trial_log.md` を更新すること。**
+
+フォーマット（最新エントリを先頭に追記）:
+
+```markdown
+## YYYY-MM-DD — セッションN
+
+### やったこと
+- 試したこと・変更内容の箇条書き
+
+### 結果
+- 成功/失敗・気づいた問題点
+
+### 次のアクション
+- 次のセッションで最初にやること（具体的に）
+```
+
+Stop フック（`.claude/settings.json`）がセッション終了時に自動で `git commit & push` する。
+更新を忘れると次のセッションで文脈が失われるため、必ず記録すること。
 
 ## 開発フェーズと現状
 
