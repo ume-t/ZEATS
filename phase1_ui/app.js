@@ -66,7 +66,6 @@ function initCategories() {
     btn.className = 'cat-btn';
     btn.dataset.catId = cat.id;
     btn.textContent = cat.name;
-    btn.title = 'クリック: 区分選択  ／  ダブルクリック: 色変更';
     applyCatBtnColor(btn, cat.color);
     if (cat.id === state.activeCategoryId) btn.classList.add('active');
     btn.addEventListener('click', () => setActiveCategory(cat.id));

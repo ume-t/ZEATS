@@ -52,6 +52,58 @@ body {
   white-space: nowrap;
 }
 
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #888;
+  color: #aaa;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: default;
+  position: relative;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.help-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0d1b35;
+  color: #ddd;
+  font-size: 11px;
+  font-weight: normal;
+  white-space: pre;
+  padding: 6px 10px;
+  border-radius: 5px;
+  border: 1px solid #0f3460;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+  z-index: 500;
+  pointer-events: none;
+  line-height: 1.7;
+}
+
+/* 吹き出しの三角 */
+.help-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: #0f3460;
+}
+
+.help-icon:hover .help-tooltip {
+  display: block;
+}
+
 #category-buttons {
   display: flex;
   gap: 5px;
