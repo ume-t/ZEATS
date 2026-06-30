@@ -166,7 +166,7 @@ def save_colors_endpoint() -> Response:
 
     color_map: dict = body['colors']
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    out_name = f"{_last_imported['original_name']}_{timestamp}.xlsx"
+    out_name = f"colors_{timestamp}.xlsx"
 
     with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
         out_path = tmp.name

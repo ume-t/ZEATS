@@ -968,17 +968,18 @@ async function saveColorsToExcel(serverUrl) {
     URL.revokeObjectURL(url);
     showToast('区分色をExcelに保存しました');
   } catch (err) {
-    alert('保存に失敗しました: ' + err.message);
+    showToast('保存失敗: ' + err.message, 5000);
+    console.error('saveColorsToExcel error:', err);
   }
 }
 
 // ──────────────────────────────────────────────
 // トースト
 // ──────────────────────────────────────────────
-function showToast(msg) {
+function showToast(msg, duration = 2500) {
   const toast = document.getElementById('toast');
   toast.textContent = msg;
   toast.classList.remove('hidden');
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.add('hidden'), 2500);
+  toast._timer = setTimeout(() => toast.classList.add('hidden'), duration);
 }
