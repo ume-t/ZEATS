@@ -18,7 +18,7 @@ import re
 from collections import Counter
 import openpyxl
 
-SKIP_SHEETS = {'全体図'}
+SKIP_SHEETS: set[str] = set()  # 座席0件のシートは parse_excel 内で自動スキップ
 
 # 凡例に記載のない独自色とチャネルIDの対応（シートをまたいで適用）
 # テーブル席では標準凡例と異なる色で事務局・ふるさと納税が使われている
@@ -33,6 +33,11 @@ SHEET_SHORT_NAMES = {
     'テーブル席':           'テーブル',
     'テーブル席（追加）':   'テーブル追加',
 }
+
+
+def _is_seat_value(v) -> bool:
+    """セル値が座席番号かどうか判定。int/floatを許容し bool を除外する。"""
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
 def _rgb(cell) -> str | None:
@@ -53,41 +58,60 @@ def _parse_count(value) -> int | None:
 
 def _find_legend(ws) -> tuple[list[dict], dict[str, str]]:
     """
-    凡例行（A列に文字+色、B列に数値or数式）を走査しチャネル情報を返す。
+    凡例行を走査しチャネル情報を返す。
+    色付きモード: A列に色 + B列に数値/数式
+    白図面モード: A列にテキスト + C列に「N列」パターン（色なし・B列なし）
     戻り値: (categories_list, {legend_rgb: channel_id})
     """
+    # 白図面モード用: C列に「N列」パターンがある行番号を収集
+    row_label_rows: set[int] = set()
+    for cell in ws['C']:
+        if cell.value and isinstance(cell.value, str):
+            if re.fullmatch(r'\d+列', cell.value.strip()):
+                row_label_rows.add(cell.row)
+
     categories = []
     color_to_id: dict[str, str] = {}
+    seen_ids: set[str] = set()
 
     for row in ws.iter_rows(max_col=3):
         a = row[0]
         b = row[1] if len(row) > 1 else None
         if not (a.value and isinstance(a.value, str)):
             continue
+
         rgb = _rgb(a)
-        if not rgb:
-            continue
-        # B列が数値か数式文字列なら凡例行とみなす
         b_val = b.value if b else None
         b_is_count = (isinstance(b_val, (int, float)) or
                       (isinstance(b_val, str) and b_val.startswith('=')))
-        if not b_is_count:
-            continue
 
         channel_id = a.value.strip()
-        if channel_id in color_to_id.values():
-            continue  # 重複スキップ
+        if channel_id in seen_ids:
+            continue
 
-        count = _parse_count(b_val)  # 数式の場合はNone
-        hex_color = '#' + rgb[2:]    # ARGBのAA部分を除去
-        categories.append({
-            'id':    channel_id,
-            'name':  channel_id,
-            'color': hex_color,
-            '_rgb':  rgb,
-            '_count': count,
-        })
-        color_to_id[rgb] = channel_id
+        if rgb and b_is_count:
+            # 色付きモード: 従来通り色+枚数で凡例検出
+            count = _parse_count(b_val)
+            hex_color = '#' + rgb[2:]
+            categories.append({
+                'id':     channel_id,
+                'name':   channel_id,
+                'color':  hex_color,
+                '_rgb':   rgb,
+                '_count': count,
+            })
+            color_to_id[rgb] = channel_id
+            seen_ids.add(channel_id)
+        elif not rgb and not b_is_count and a.row in row_label_rows:
+            # 白図面モード: 色なし・B列なし・C列に行ラベルあり → チャネル名行
+            categories.append({
+                'id':     channel_id,
+                'name':   channel_id,
+                'color':  None,
+                '_rgb':   None,
+                '_count': None,
+            })
+            seen_ids.add(channel_id)
 
     return categories, color_to_id
 
@@ -106,7 +130,7 @@ def _build_color_map(ws, categories: list[dict],
     seat_color_counts: Counter = Counter()
     for row in ws.iter_rows():
         for cell in row:
-            if cell.value is not None and isinstance(cell.value, int):
+            if _is_seat_value(cell.value):
                 rgb = _rgb(cell)
                 if rgb:
                     seat_color_counts[rgb] += 1
@@ -214,7 +238,7 @@ def _parse_sheet(ws, short_name: str,
         for cell in row:
             if cell.column <= 3:
                 continue  # A列=セクション名, B列=凡例枚数, C列=行ラベル → 座席対象外
-            if not (cell.value is not None and isinstance(cell.value, int)):
+            if not _is_seat_value(cell.value):
                 continue
             row_num = row_labels.get(cell.row)
             if row_num is None:
@@ -224,7 +248,8 @@ def _parse_sheet(ws, short_name: str,
             if block is None:
                 continue
 
-            seat_id = f"{short_name}_{block}_{row_num}列_{cell.value}番"
+            seat_num = int(cell.value)
+            seat_id = f"{short_name}_{block}_{row_num}列_{seat_num}番"
             rgb = _rgb(cell)
             channel_id = color_to_id.get(rgb) if rgb else None
 
@@ -293,13 +318,30 @@ def parse_excel(filepath: str) -> dict:
     # data_only=Falseで読み込み（数式文字列として取得し凡例検出を安定化）
     wb = openpyxl.load_workbook(filepath, data_only=False)
 
-    # 凡例は最初の座席シートから取得（全シート共通の色→チャネルマップのベース）
-    first_seat = next(n for n in wb.sheetnames if n not in SKIP_SHEETS)
-    global_categories, global_legend_color_to_id = _find_legend(wb[first_seat])
+    # " (数字)" サフィックスのシートは、同名のベースシートが存在する場合はスキップ
+    # （例: 「マーブルビーチサイド (2)」があり「マーブルビーチサイド」も存在する旧バージョンシート）
+    _duplicate_re = re.compile(r'\s+\(\d+\)$')
+    _base_names = set(wb.sheetnames)
+    def _is_duplicate_sheet(name: str) -> bool:
+        m = _duplicate_re.search(name)
+        return bool(m) and name[:m.start()] in _base_names
 
-    # _countなどの内部フィールドを除いた公開用categories
+    # 凡例を持つ最初のシートからグローバルチャネル情報を取得
+    global_categories: list[dict] = []
+    global_legend_color_to_id: dict[str, str] = {}
+    for _n in wb.sheetnames:
+        if _n in SKIP_SHEETS or _is_duplicate_sheet(_n):
+            continue
+        _cats, _color_map = _find_legend(wb[_n])
+        if _cats:
+            global_categories = _cats
+            global_legend_color_to_id = _color_map
+            break
+
+    # _countなどの内部フィールドを除いた公開用categories（color=Noneは省略）
     public_categories = [
-        {'id': c['id'], 'name': c['name'], 'color': c['color']}
+        {k: v for k, v in {'id': c['id'], 'name': c['name'], 'color': c['color']}.items()
+         if v is not None}
         for c in global_categories
     ]
 
@@ -310,7 +352,7 @@ def parse_excel(filepath: str) -> dict:
     }
 
     for sheet_name in wb.sheetnames:
-        if sheet_name in SKIP_SHEETS:
+        if sheet_name in SKIP_SHEETS or _is_duplicate_sheet(sheet_name):
             continue
 
         ws = wb[sheet_name]
@@ -326,6 +368,8 @@ def parse_excel(filepath: str) -> dict:
             color_to_id = {**global_legend_color_to_id, **EXTRA_COLOR_MAPPINGS}
 
         seats = _parse_sheet(ws, short_name, color_to_id)
+        if not seats:
+            continue  # 座席0件のシート（全体図・旧バージョンシート等）はスキップ
         blocks = _generate_blocks(seats, short_name)
 
         result['sheets'][sheet_name] = {
@@ -341,13 +385,13 @@ def parse_excel(filepath: str) -> dict:
 if __name__ == '__main__':
     import sys
 
-    filepath   = sys.argv[1] if len(sys.argv) > 1 else '../tmp/大阪フォーマット.xlsx'
+    filepath   = sys.argv[1] if len(sys.argv) > 1 else '../tmp/大阪フォーマット_白図面.xlsx'
     output     = sys.argv[2] if len(sys.argv) > 2 else None
     data = parse_excel(filepath)
 
     print(f"チャネル数: {len(data['categories'])}")
     for cat in data['categories']:
-        print(f"  {cat['name']} ({cat['color']})")
+        print(f"  {cat['name']} ({cat.get('color', '色未設定')})")
 
     total_seats = 0
     for sheet_name, sheet in data['sheets'].items():
