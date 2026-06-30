@@ -53,12 +53,12 @@ def export_excel(data: dict, output_path: str) -> None:
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
-    # カテゴリID → PatternFill のマップ
+    # カテゴリID → PatternFill のマップ（color未設定の区分はスキップ）
     cat_fills: dict[str, PatternFill] = {}
     for cat in data.get('categories', []):
-        cat_fills[cat['id']] = PatternFill(
-            fill_type='solid', fgColor=_argb(cat['color'])
-        )
+        color = cat.get('color')
+        if color:
+            cat_fills[cat['id']] = PatternFill(fill_type='solid', fgColor=_argb(color))
 
     for sheet_name, sheet_data in data.get('sheets', {}).items():
         ws = wb.create_sheet(title=sheet_name[:31])
