@@ -21,6 +21,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `main` へのマージはユーザーが「main にマージして」と指示したときにPRを作成する。
 マージ方法は通常マージ（fast-forward なし）を使用する。
 
+### マージ提案のタイミング
+
+以下のいずれかに該当したら、Claude から「そろそろ main にマージしませんか？」と提案すること：
+
+- GitHub Issue が1つCloseされた（機能単位で動作確認済み）
+- `dev` に意味のあるコミットが5件以上溜まった
+- セッション終了前に、今回の作業が一段落したと判断できるとき
+
 ## 進捗管理
 
 ### GitHub Issues — タスクの完了/未完了管理
