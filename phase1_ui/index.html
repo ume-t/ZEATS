@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>座席管理システム</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="header">
+    <h1>座席管理システム</h1>
+    <div id="controls">
+      <div id="category-panel">
+        <span class="panel-label">区分選択：</span>
+        <div id="category-buttons"></div>
+      </div>
+      <div id="action-buttons">
+        <button id="btn-clear-selection">選択解除</button>
+        <button id="btn-reset-all">全リセット</button>
+        <button id="btn-export">JSON出力</button>
+        <button id="btn-import-json">JSON読込</button>
+        <input type="file" id="import-file-input" accept=".json" style="display:none">
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="layout-area">
+      <div id="stage-label">【ステージ】</div>
+      <div id="seat-grid"></div>
+    </div>
+
+    <div id="sidebar">
+      <div id="summary-panel">
+        <h2>集計</h2>
+        <div id="summary-list"></div>
+        <div id="total-count"></div>
+      </div>
+      <div id="ticket-panel">
+        <h2>チケット番号</h2>
+        <div id="ticket-format">
+          <label>プレフィックス：<input type="text" id="ticket-prefix" value="A" maxlength="5"></label>
+          <label>開始番号：<input type="number" id="ticket-start" value="1" min="1"></label>
+        </div>
+        <button id="btn-assign-tickets">番号を割り振る</button>
+        <div id="ticket-preview"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="context-menu" class="hidden">
+    <ul id="context-menu-list"></ul>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

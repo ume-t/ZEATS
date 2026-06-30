@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Electron / Node
+node_modules/
+dist/
+
+# 出力ファイル
+*.pdf
+*.xlsx
+
+# 一時ファイル
+tmp/
