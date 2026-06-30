@@ -10,6 +10,7 @@ ExcelファイルをZEATSのJSONデータに変換するモジュール。
   1. 凡例A列の色と座席色が完全一致 → そのまま使用
   2. 不一致の場合（アウトレットサイドの事務局など）→ 凡例の枚数と
      座席色の出現数が一致するカウントベースマッチングで補完
+  3. 凡例に存在しない独自色（テーブル席など）→ EXTRA_COLOR_MAPPINGS で補完
 """
 
 import json
@@ -18,6 +19,13 @@ from collections import Counter
 import openpyxl
 
 SKIP_SHEETS = {'全体図'}
+
+# 凡例に記載のない独自色とチャネルIDの対応（シートをまたいで適用）
+# テーブル席では標準凡例と異なる色で事務局・ふるさと納税が使われている
+EXTRA_COLOR_MAPPINGS: dict[str, str] = {
+    'FFFAE2D5': '事務局',       # テーブル席の事務局色
+    'FFFBE2D5': 'ふるさと納税',  # テーブル席のふるさと納税色
+}
 
 SHEET_SHORT_NAMES = {
     'マーブルビーチサイド': 'マーブル',
@@ -123,6 +131,11 @@ def _build_color_map(ws, categories: list[dict],
         if len(exact) == 1:
             color_to_id[exact[0]] = cat['id']
             del unmatched_seat_colors[exact[0]]
+
+    # 3次: EXTRA_COLOR_MAPPINGS で残った未マッチ色を補完
+    for rgb, channel_id in EXTRA_COLOR_MAPPINGS.items():
+        if rgb not in color_to_id:
+            color_to_id[rgb] = channel_id
 
     return color_to_id
 
@@ -270,8 +283,8 @@ def parse_excel(filepath: str) -> dict:
             # 凡例あり: シート固有のフォールバックマッチを適用
             color_to_id = _build_color_map(ws, sheet_cats, legend_color_to_id)
         else:
-            # 凡例なし（テーブル席など）: グローバルの色→チャネルマップをそのまま使用
-            color_to_id = dict(global_legend_color_to_id)
+            # 凡例なし（テーブル席など）: グローバルマップ + EXTRA_COLOR_MAPPINGS を使用
+            color_to_id = {**global_legend_color_to_id, **EXTRA_COLOR_MAPPINGS}
 
         seats = _parse_sheet(ws, short_name, color_to_id)
 
