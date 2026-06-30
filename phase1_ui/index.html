@@ -16,21 +16,41 @@
         <div id="category-buttons"></div>
       </div>
       <div id="action-buttons">
-        <button id="btn-clear-selection">選択解除</button>
         <button id="btn-reset-all">全リセット</button>
         <button id="btn-export">JSON出力</button>
-        <button id="btn-import-json">JSON読込</button>
+        <button id="btn-import-json">Excelから変換したJSONを読込</button>
         <input type="file" id="import-file-input" accept=".json" style="display:none">
+        <button id="btn-import-excel-json">作業JSONを読込</button>
+        <input type="file" id="import-work-input" accept=".json" style="display:none">
       </div>
     </div>
   </div>
 
+  <!-- シートタブ（Excelインポート時に表示） -->
+  <div id="sheet-tabs" class="hidden"></div>
+
   <div id="main">
+    <!-- 左: 座席表示エリア -->
     <div id="layout-area">
-      <div id="stage-label">【ステージ】</div>
-      <div id="seat-grid"></div>
+
+      <!-- 通常モード: グリッド -->
+      <div id="grid-mode">
+        <div id="stage-label">【ステージ】</div>
+        <div id="seat-grid"></div>
+      </div>
+
+      <!-- Excelインポートモード: ブロック検索 + カード -->
+      <div id="block-mode" class="hidden">
+        <div id="block-search-bar">
+          <input type="text" id="block-search" placeholder="ブロック名で検索...">
+          <span id="block-count-label"></span>
+        </div>
+        <div id="block-cards"></div>
+      </div>
+
     </div>
 
+    <!-- 右: サイドバー -->
     <div id="sidebar">
       <div id="summary-panel">
         <h2>集計</h2>

@@ -1,9 +1,9 @@
 'use strict';
 
 // ──────────────────────────────────────────────
-// 区分定義（確定後に変更してください）
+// 区分定義（Excelインポート時はJSONから上書きされる）
 // ──────────────────────────────────────────────
-const CATEGORIES = [
+let CATEGORIES = [
   { id: 'A',     name: 'A区分',   color: '#e74c3c' },
   { id: 'B',     name: 'B区分',   color: '#3498db' },
   { id: 'C',     name: 'C区分',   color: '#2ecc71' },
@@ -13,36 +13,35 @@ const CATEGORIES = [
 ];
 
 // ──────────────────────────────────────────────
-// 初期座席レイアウト（仮データ: 10行 × 12列）
-// null = 通路（空セル）, 文字列 = 座席ID
+// 初期座席レイアウト（手動モード用・仮データ）
+// null = 通路, 文字列 = 座席ID
 // ──────────────────────────────────────────────
 function buildDefaultLayout() {
-  const rows = 10;
-  const cols = 12;
-  const layout = [];
   const rowLabels = 'ABCDEFGHIJ'.split('');
-  for (let r = 0; r < rows; r++) {
-    const row = [];
-    for (let c = 0; c < cols; c++) {
-      // 列3と列8を通路にする
-      if (c === 3 || c === 8) {
-        row.push(null);
-      } else {
-        const colNum = c < 3 ? c + 1 : c < 8 ? c : c - 1;
-        row.push(`${rowLabels[r]}${colNum}`);
-      }
-    }
-    layout.push(row);
-  }
-  return layout;
+  return rowLabels.map(r =>
+    Array.from({ length: 12 }, (_, c) =>
+      (c === 3 || c === 8) ? null : `${r}${c < 3 ? c + 1 : c < 8 ? c : c - 1}`
+    )
+  );
 }
 
 // ──────────────────────────────────────────────
 // アプリ状態
 // ──────────────────────────────────────────────
 const state = {
-  layout: buildDefaultLayout(),   // 2D配列: null or 座席ID
-  seats: {},                       // { 座席ID: { categoryId, ticketNo } }
+  // 表示モード: 'manual'（手動グリッド）| 'import'（Excelインポート）
+  mode: 'manual',
+
+  // --- 手動モード ---
+  layout: buildDefaultLayout(),
+  seats: {},
+
+  // --- インポートモード ---
+  sheetsData: {},        // { シート名: { name, shortName, seats, blocks } }
+  activeSheetName: null,
+  activeSeatsDirty: {},  // インポートモードでの変更 { seatId: { categoryId, ticketNo } }
+
+  // --- 共通 ---
   activeCategoryId: CATEGORIES[0].id,
 };
 
@@ -57,10 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ──────────────────────────────────────────────
-// 区分ボタン生成
+// 区分ボタン
 // ──────────────────────────────────────────────
 function initCategories() {
   const container = document.getElementById('category-buttons');
+  container.innerHTML = '';
   CATEGORIES.forEach(cat => {
     const btn = document.createElement('button');
     btn.className = 'cat-btn';
@@ -72,7 +72,6 @@ function initCategories() {
     container.appendChild(btn);
   });
 
-  // 「選択解除」ボタン
   const eraseBtn = document.createElement('button');
   eraseBtn.className = 'cat-btn';
   eraseBtn.dataset.catId = '__erase__';
@@ -84,13 +83,172 @@ function initCategories() {
 
 function setActiveCategory(id) {
   state.activeCategoryId = id;
-  document.querySelectorAll('.cat-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.catId === id);
-  });
+  document.querySelectorAll('.cat-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.catId === id)
+  );
 }
 
 // ──────────────────────────────────────────────
-// グリッド描画
+// 現在のシートの seats を返すヘルパー
+// ──────────────────────────────────────────────
+function currentSeats() {
+  if (state.mode === 'import') {
+    const base = state.sheetsData[state.activeSheetName]?.seats || {};
+    return { ...base, ...state.activeSeatsDirty };
+  }
+  return state.seats;
+}
+
+// ──────────────────────────────────────────────
+// 座席割当を書き込む（モード共通）
+// ──────────────────────────────────────────────
+function setSeat(seatId, categoryId) {
+  if (state.mode === 'import') {
+    if (!state.activeSeatsDirty[seatId]) {
+      // ベースからコピーして上書き
+      const base = state.sheetsData[state.activeSheetName]?.seats?.[seatId] || {};
+      state.activeSeatsDirty[seatId] = { ...base };
+    }
+    state.activeSeatsDirty[seatId].categoryId = categoryId;
+    state.activeSeatsDirty[seatId].ticketNo   = null;
+  } else {
+    if (!state.seats[seatId]) state.seats[seatId] = {};
+    state.seats[seatId].categoryId = categoryId;
+    state.seats[seatId].ticketNo   = null;
+  }
+}
+
+function eraseSeat(seatId) {
+  if (state.mode === 'import') {
+    state.activeSeatsDirty[seatId] = { categoryId: null, ticketNo: null };
+  } else {
+    delete state.seats[seatId];
+  }
+}
+
+// ──────────────────────────────────────────────
+// モード切り替え
+// ──────────────────────────────────────────────
+function setMode(mode) {
+  state.mode = mode;
+  document.getElementById('grid-mode').classList.toggle('hidden', mode === 'import');
+  document.getElementById('block-mode').classList.toggle('hidden', mode === 'manual');
+  document.getElementById('block-mode').style.display = mode === 'import' ? 'flex' : 'none';
+  document.getElementById('sheet-tabs').classList.toggle('hidden', mode === 'manual');
+}
+
+// ──────────────────────────────────────────────
+// シートタブ描画
+// ──────────────────────────────────────────────
+function renderSheetTabs() {
+  const tabs = document.getElementById('sheet-tabs');
+  tabs.innerHTML = '';
+  Object.keys(state.sheetsData).forEach(name => {
+    const tab = document.createElement('button');
+    tab.className = 'sheet-tab' + (name === state.activeSheetName ? ' active' : '');
+    tab.textContent = name;
+    tab.addEventListener('click', () => switchSheet(name));
+    tabs.appendChild(tab);
+  });
+}
+
+function switchSheet(name) {
+  state.activeSheetName = name;
+  state.activeSeatsDirty = {};
+  renderSheetTabs();
+  renderBlockView();
+  renderSummary();
+  document.getElementById('ticket-preview').textContent = '';
+}
+
+// ──────────────────────────────────────────────
+// ブロックビュー描画（インポートモード）
+// ──────────────────────────────────────────────
+function renderBlockView(filterText = '') {
+  const sheet = state.sheetsData[state.activeSheetName];
+  if (!sheet) return;
+
+  const seats = currentSeats();
+  const query = filterText.toLowerCase();
+  const filtered = sheet.blocks.filter(b =>
+    !query || b.name.toLowerCase().includes(query)
+  );
+
+  document.getElementById('block-count-label').textContent =
+    `${filtered.length} / ${sheet.blocks.length} ブロック`;
+
+  const container = document.getElementById('block-cards');
+  container.innerHTML = '';
+
+  filtered.forEach(block => {
+    const card = document.createElement('div');
+    card.className = 'block-card';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'block-card-name';
+    nameEl.textContent = block.name;
+    card.appendChild(nameEl);
+
+    block.rows.forEach((rowSeats, rIdx) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'block-row';
+
+      const lbl = document.createElement('span');
+      lbl.className = 'block-row-label';
+      lbl.textContent = `${rIdx + 1}列`;
+      rowEl.appendChild(lbl);
+
+      rowSeats.forEach(seatId => {
+        const seatEl = document.createElement('div');
+        seatEl.className = 'block-seat';
+        seatEl.dataset.seatId = seatId;
+
+        // 座席番号だけ表示（末尾の番号を抽出）
+        const num = seatId.match(/_(\d+)番$/)?.[1] || '';
+        seatEl.textContent = num;
+        seatEl.title = seatId;
+
+        applyBlockSeatStyle(seatEl, seatId, seats);
+
+        seatEl.addEventListener('click', () => onBlockSeatClick(seatId, seatEl));
+        seatEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, seatId, seatEl, true); });
+        rowEl.appendChild(seatEl);
+      });
+
+      card.appendChild(rowEl);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+function applyBlockSeatStyle(el, seatId, seats) {
+  const seat = seats[seatId];
+  if (seat && seat.categoryId) {
+    const cat = CATEGORIES.find(c => c.id === seat.categoryId);
+    el.style.backgroundColor = cat ? cat.color : '#2a2a4a';
+    el.style.borderColor = 'transparent';
+    el.style.color = 'rgba(0,0,0,0.75)';
+  } else {
+    el.style.backgroundColor = '#2a2a4a';
+    el.style.borderColor = 'rgba(255,255,255,0.12)';
+    el.style.color = '#555';
+  }
+}
+
+function onBlockSeatClick(seatId, el) {
+  hideContextMenu();
+  if (state.activeCategoryId === '__erase__') {
+    eraseSeat(seatId);
+  } else {
+    setSeat(seatId, state.activeCategoryId);
+  }
+  applyBlockSeatStyle(el, seatId, currentSeats());
+  renderSummary();
+}
+
+// ──────────────────────────────────────────────
+// 手動グリッド描画
 // ──────────────────────────────────────────────
 function renderGrid() {
   const grid = document.getElementById('seat-grid');
@@ -99,29 +257,28 @@ function renderGrid() {
   grid.innerHTML = '';
 
   state.layout.forEach((row, rIdx) => {
-    // 行ラベル
     const label = document.createElement('div');
     label.className = 'row-label';
     label.textContent = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[rIdx];
     grid.appendChild(label);
 
-    row.forEach((seatId, cIdx) => {
+    row.forEach(seatId => {
       const cell = document.createElement('div');
       if (seatId === null) {
         cell.className = 'seat aisle';
       } else {
         cell.className = 'seat';
         cell.dataset.seatId = seatId;
-        applySeatStyle(cell, seatId);
-        cell.addEventListener('click', () => onSeatClick(seatId, cell));
-        cell.addEventListener('contextmenu', (e) => onSeatRightClick(e, seatId));
+        applyGridSeatStyle(cell, seatId);
+        cell.addEventListener('click', () => onGridSeatClick(seatId, cell));
+        cell.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, seatId, cell, false); });
       }
       grid.appendChild(cell);
     });
   });
 }
 
-function applySeatStyle(cell, seatId) {
+function applyGridSeatStyle(cell, seatId) {
   const seat = state.seats[seatId];
   if (seat && seat.categoryId) {
     const cat = CATEGORIES.find(c => c.id === seat.categoryId);
@@ -137,36 +294,25 @@ function applySeatStyle(cell, seatId) {
   }
 }
 
-// ──────────────────────────────────────────────
-// 座席クリック
-// ──────────────────────────────────────────────
-function onSeatClick(seatId, cell) {
+function onGridSeatClick(seatId, cell) {
   hideContextMenu();
   if (state.activeCategoryId === '__erase__') {
-    delete state.seats[seatId];
+    eraseSeat(seatId);
   } else {
-    if (!state.seats[seatId]) state.seats[seatId] = {};
-    state.seats[seatId].categoryId = state.activeCategoryId;
-    state.seats[seatId].ticketNo = null;
+    setSeat(seatId, state.activeCategoryId);
   }
-  applySeatStyle(cell, seatId);
+  applyGridSeatStyle(cell, seatId);
   renderSummary();
 }
 
 // ──────────────────────────────────────────────
-// 右クリックメニュー
+// コンテキストメニュー
 // ──────────────────────────────────────────────
-function onSeatRightClick(e, seatId) {
-  e.preventDefault();
-  showContextMenu(e.clientX, e.clientY, seatId);
-}
-
-function showContextMenu(x, y, seatId) {
+function showContextMenu(x, y, seatId, el, isBlock) {
   const menu = document.getElementById('context-menu');
   const list = document.getElementById('context-menu-list');
   list.innerHTML = '';
 
-  // 区分変更オプション
   CATEGORIES.forEach(cat => {
     const li = document.createElement('li');
     const dot = document.createElement('span');
@@ -175,32 +321,29 @@ function showContextMenu(x, y, seatId) {
     li.appendChild(dot);
     li.appendChild(document.createTextNode(cat.name));
     li.addEventListener('click', () => {
-      if (!state.seats[seatId]) state.seats[seatId] = {};
-      state.seats[seatId].categoryId = cat.id;
-      state.seats[seatId].ticketNo = null;
-      const cell = document.querySelector(`[data-seat-id="${seatId}"]`);
-      if (cell) applySeatStyle(cell, seatId);
+      setSeat(seatId, cat.id);
+      if (isBlock) applyBlockSeatStyle(el, seatId, currentSeats());
+      else applyGridSeatStyle(el, seatId);
       renderSummary();
       hideContextMenu();
     });
     list.appendChild(li);
   });
 
-  // 消去オプション
   const eraseItem = document.createElement('li');
   eraseItem.style.borderTop = '1px solid #0f3460';
   eraseItem.textContent = '区分を消去';
   eraseItem.addEventListener('click', () => {
-    delete state.seats[seatId];
-    const cell = document.querySelector(`[data-seat-id="${seatId}"]`);
-    if (cell) applySeatStyle(cell, seatId);
+    eraseSeat(seatId);
+    if (isBlock) applyBlockSeatStyle(el, seatId, currentSeats());
+    else applyGridSeatStyle(el, seatId);
     renderSummary();
     hideContextMenu();
   });
   list.appendChild(eraseItem);
 
   menu.style.left = `${Math.min(x, window.innerWidth - 160)}px`;
-  menu.style.top = `${Math.min(y, window.innerHeight - 200)}px`;
+  menu.style.top  = `${Math.min(y, window.innerHeight - 200)}px`;
   menu.classList.remove('hidden');
 }
 
@@ -215,19 +358,29 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') hideContextM
 // 集計パネル
 // ──────────────────────────────────────────────
 function renderSummary() {
+  const seats = currentSeats();
   const counts = {};
   CATEGORIES.forEach(c => { counts[c.id] = 0; });
   let assigned = 0;
-  Object.values(state.seats).forEach(s => {
-    if (s.categoryId) {
-      counts[s.categoryId] = (counts[s.categoryId] || 0) + 1;
-      assigned++;
-    }
-  });
-
-  // 総座席数
   let total = 0;
-  state.layout.forEach(row => row.forEach(cell => { if (cell !== null) total++; }));
+
+  if (state.mode === 'import') {
+    Object.values(seats).forEach(s => {
+      if (s.categoryId) {
+        counts[s.categoryId] = (counts[s.categoryId] || 0) + 1;
+        assigned++;
+      }
+      total++;
+    });
+  } else {
+    Object.values(state.seats).forEach(s => {
+      if (s.categoryId) {
+        counts[s.categoryId] = (counts[s.categoryId] || 0) + 1;
+        assigned++;
+      }
+    });
+    state.layout.forEach(row => row.forEach(cell => { if (cell !== null) total++; }));
+  }
 
   const list = document.getElementById('summary-list');
   list.innerHTML = '';
@@ -247,78 +400,176 @@ function renderSummary() {
 }
 
 // ──────────────────────────────────────────────
-// チケット番号割り振り
+// チケット採番
 // ──────────────────────────────────────────────
 function assignTickets() {
-  const prefix = document.getElementById('ticket-prefix').value.trim();
+  const prefix   = document.getElementById('ticket-prefix').value.trim();
   const startNum = parseInt(document.getElementById('ticket-start').value, 10) || 1;
-
   let num = startNum;
   const preview = [];
 
-  // 座席を行列順に並べて採番
-  state.layout.forEach(row => {
-    row.forEach(seatId => {
-      if (seatId && state.seats[seatId] && state.seats[seatId].categoryId) {
-        const ticketNo = `${prefix}${String(num).padStart(3, '0')}`;
-        state.seats[seatId].ticketNo = ticketNo;
-        preview.push(`${seatId} → ${ticketNo}`);
-        num++;
-      }
+  if (state.mode === 'import') {
+    const sheet = state.sheetsData[state.activeSheetName];
+    if (!sheet) return;
+    const seats = currentSeats();
+    sheet.blocks.forEach(block => {
+      block.rows.forEach(rowSeats => {
+        rowSeats.forEach(seatId => {
+          if (seats[seatId]?.categoryId) {
+            const ticketNo = `${prefix}${String(num).padStart(3, '0')}`;
+            if (!state.activeSeatsDirty[seatId]) {
+              state.activeSeatsDirty[seatId] = { ...seats[seatId] };
+            }
+            state.activeSeatsDirty[seatId].ticketNo = ticketNo;
+            preview.push(`${seatId} → ${ticketNo}`);
+            num++;
+          }
+        });
+      });
     });
-  });
+    renderBlockView(document.getElementById('block-search').value);
+  } else {
+    state.layout.forEach(row => {
+      row.forEach(seatId => {
+        if (seatId && state.seats[seatId]?.categoryId) {
+          const ticketNo = `${prefix}${String(num).padStart(3, '0')}`;
+          state.seats[seatId].ticketNo = ticketNo;
+          preview.push(`${seatId} → ${ticketNo}`);
+          num++;
+        }
+      });
+    });
+    document.querySelectorAll('.seat[data-seat-id]').forEach(cell =>
+      applyGridSeatStyle(cell, cell.dataset.seatId)
+    );
+  }
 
-  // グリッド再描画
-  document.querySelectorAll('.seat[data-seat-id]').forEach(cell => {
-    applySeatStyle(cell, cell.dataset.seatId);
-  });
-
-  document.getElementById('ticket-preview').textContent = preview.slice(0, 20).join('\n') +
+  document.getElementById('ticket-preview').textContent =
+    preview.slice(0, 20).join('\n') +
     (preview.length > 20 ? `\n... 他${preview.length - 20}席` : '');
 
   showToast(`${preview.length}席にチケット番号を割り振りました`);
 }
 
 // ──────────────────────────────────────────────
-// JSON エクスポート / インポート
+// JSON エクスポート
 // ──────────────────────────────────────────────
 function exportJSON() {
-  const data = {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    categories: CATEGORIES,
-    layout: state.layout,
-    seats: state.seats,
-    ticketConfig: {
-      prefix: document.getElementById('ticket-prefix').value,
-      startNum: parseInt(document.getElementById('ticket-start').value, 10),
-    },
-  };
+  let data;
+  if (state.mode === 'import') {
+    // 変更をマージして全シートを出力
+    const mergedSheets = {};
+    Object.entries(state.sheetsData).forEach(([name, sheet]) => {
+      const mergedSeats = name === state.activeSheetName
+        ? { ...sheet.seats, ...state.activeSeatsDirty }
+        : { ...sheet.seats };
+      mergedSheets[name] = { ...sheet, seats: mergedSeats };
+    });
+    data = {
+      version:      1,
+      exportedAt:   new Date().toISOString(),
+      categories:   CATEGORIES,
+      sheets:       mergedSheets,
+      ticketConfig: {
+        prefix:   document.getElementById('ticket-prefix').value,
+        startNum: parseInt(document.getElementById('ticket-start').value, 10),
+      },
+    };
+  } else {
+    data = {
+      version:      1,
+      exportedAt:   new Date().toISOString(),
+      categories:   CATEGORIES,
+      layout:       state.layout,
+      seats:        state.seats,
+      ticketConfig: {
+        prefix:   document.getElementById('ticket-prefix').value,
+        startNum: parseInt(document.getElementById('ticket-start').value, 10),
+      },
+    };
+  }
+
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `seat-layout-${new Date().toISOString().slice(0,10)}.json`;
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `zeats-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
   showToast('JSONをエクスポートしました');
 }
 
-function importJSON(file) {
+// ──────────────────────────────────────────────
+// JSON インポート
+// ──────────────────────────────────────────────
+
+// Excel変換JSONの読み込み（シート + ブロック構造）
+function importExcelJSON(file) {
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
-      if (!data.version || !data.seats || !data.layout) throw new Error('フォーマット不正');
-      state.layout = data.layout;
-      state.seats = data.seats;
-      if (data.ticketConfig) {
-        document.getElementById('ticket-prefix').value = data.ticketConfig.prefix || 'A';
-        document.getElementById('ticket-start').value = data.ticketConfig.startNum || 1;
+      if (!data.version || !data.sheets || !data.categories) throw new Error('フォーマット不正');
+
+      CATEGORIES = data.categories;
+      initCategories();
+      if (!CATEGORIES.find(c => c.id === state.activeCategoryId)) {
+        state.activeCategoryId = CATEGORIES[0]?.id || null;
+        setActiveCategory(state.activeCategoryId);
       }
+
+      state.sheetsData = data.sheets;
+      state.activeSheetName = Object.keys(data.sheets)[0];
+      state.activeSeatsDirty = {};
+
+      if (data.ticketConfig) {
+        document.getElementById('ticket-prefix').value  = data.ticketConfig.prefix || 'A';
+        document.getElementById('ticket-start').value   = data.ticketConfig.startNum || 1;
+      }
+
+      setMode('import');
+      renderSheetTabs();
+      renderBlockView();
+      renderSummary();
+      document.getElementById('ticket-preview').textContent = '';
+      showToast(`Excelデータを読み込みました（${Object.keys(data.sheets).length}シート）`);
+    } catch (err) {
+      alert('JSONの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// 作業JSONの読み込み（手動モード or 保存済みインポートモード）
+function importWorkJSON(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.version) throw new Error('フォーマット不正');
+
+      if (data.sheets) {
+        // インポートモード形式
+        importExcelJSON(file);
+        return;
+      }
+
+      // 手動モード形式（layout + seats）
+      if (!data.seats || !data.layout) throw new Error('フォーマット不正');
+      if (data.categories) {
+        CATEGORIES = data.categories;
+        initCategories();
+      }
+      state.layout = data.layout;
+      state.seats  = data.seats;
+      if (data.ticketConfig) {
+        document.getElementById('ticket-prefix').value  = data.ticketConfig.prefix || 'A';
+        document.getElementById('ticket-start').value   = data.ticketConfig.startNum || 1;
+      }
+      setMode('manual');
       renderGrid();
       renderSummary();
-      showToast('JSONを読み込みました');
+      showToast('作業JSONを読み込みました');
     } catch (err) {
       alert('JSONの読み込みに失敗しました: ' + err.message);
     }
@@ -330,14 +581,15 @@ function importJSON(file) {
 // ボタンバインド
 // ──────────────────────────────────────────────
 function bindActions() {
-  document.getElementById('btn-clear-selection').addEventListener('click', () => {
-    setActiveCategory(CATEGORIES[0].id);
-  });
-
   document.getElementById('btn-reset-all').addEventListener('click', () => {
     if (!confirm('全ての区分・チケット番号をリセットしますか？')) return;
-    state.seats = {};
-    renderGrid();
+    if (state.mode === 'import') {
+      state.activeSeatsDirty = {};
+      renderBlockView(document.getElementById('block-search').value);
+    } else {
+      state.seats = {};
+      renderGrid();
+    }
     renderSummary();
     document.getElementById('ticket-preview').textContent = '';
     showToast('リセットしました');
@@ -345,20 +597,32 @@ function bindActions() {
 
   document.getElementById('btn-export').addEventListener('click', exportJSON);
 
-  document.getElementById('btn-import-json').addEventListener('click', () => {
-    document.getElementById('import-file-input').click();
+  document.getElementById('btn-import-json').addEventListener('click', () =>
+    document.getElementById('import-file-input').click()
+  );
+  document.getElementById('import-file-input').addEventListener('change', e => {
+    if (e.target.files[0]) importExcelJSON(e.target.files[0]);
+    e.target.value = '';
   });
 
-  document.getElementById('import-file-input').addEventListener('change', (e) => {
-    if (e.target.files[0]) importJSON(e.target.files[0]);
+  document.getElementById('btn-import-excel-json').addEventListener('click', () =>
+    document.getElementById('import-work-input').click()
+  );
+  document.getElementById('import-work-input').addEventListener('change', e => {
+    if (e.target.files[0]) importWorkJSON(e.target.files[0]);
     e.target.value = '';
   });
 
   document.getElementById('btn-assign-tickets').addEventListener('click', assignTickets);
+
+  // ブロック検索
+  document.getElementById('block-search').addEventListener('input', e =>
+    renderBlockView(e.target.value)
+  );
 }
 
 // ──────────────────────────────────────────────
-// トースト通知
+// トースト
 // ──────────────────────────────────────────────
 function showToast(msg) {
   const toast = document.getElementById('toast');

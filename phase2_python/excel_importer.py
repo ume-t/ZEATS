@@ -212,6 +212,8 @@ def _parse_sheet(ws, short_name: str,
 
     for row in ws.iter_rows():
         for cell in row:
+            if cell.column <= 3:
+                continue  # A列=セクション名, B列=凡例枚数, C列=行ラベル → 座席対象外
             if not (cell.value is not None and isinstance(cell.value, int)):
                 continue
             row_num = row_labels.get(cell.row)
@@ -232,6 +234,43 @@ def _parse_sheet(ws, short_name: str,
             }
 
     return seats
+
+
+def _generate_blocks(seats: dict, short_name: str) -> list[dict]:
+    """
+    seats辞書からブロック別の表示構造を生成する。
+
+    戻り値:
+      [ { "name": block_name,
+          "rows": [ [seat_id, ...], ... ]  # 行順・座席番号降順
+        }, ... ]
+    """
+    prefix = short_name + '_'
+    block_rows: dict[str, dict[int, list]] = {}
+
+    for seat_id in seats:
+        rest = seat_id[len(prefix):]
+        m = re.search(r'^(.+)_(\d+)列_(\d+)番$', rest)
+        if not m:
+            continue
+        block, row_num, seat_num = m.group(1), int(m.group(2)), int(m.group(3))
+        block_rows.setdefault(block, {}).setdefault(row_num, []).append(
+            (seat_num, seat_id)
+        )
+
+    def _natural_key(s: str):
+        return [int(t) if t.isdigit() else t for t in re.split(r'(\d+)', s)]
+
+    blocks = []
+    for block_name in sorted(block_rows, key=_natural_key):
+        rows_dict = block_rows[block_name]
+        rows = [
+            [sid for _, sid in sorted(rows_dict[r], reverse=True)]
+            for r in sorted(rows_dict)
+        ]
+        blocks.append({'name': block_name, 'rows': rows})
+
+    return blocks
 
 
 def parse_excel(filepath: str) -> dict:
@@ -287,11 +326,13 @@ def parse_excel(filepath: str) -> dict:
             color_to_id = {**global_legend_color_to_id, **EXTRA_COLOR_MAPPINGS}
 
         seats = _parse_sheet(ws, short_name, color_to_id)
+        blocks = _generate_blocks(seats, short_name)
 
         result['sheets'][sheet_name] = {
             'name':      sheet_name,
             'shortName': short_name,
             'seats':     seats,
+            'blocks':    blocks,
         }
 
     return result
@@ -300,7 +341,8 @@ def parse_excel(filepath: str) -> dict:
 if __name__ == '__main__':
     import sys
 
-    filepath = sys.argv[1] if len(sys.argv) > 1 else '../tmp/大阪フォーマット.xlsx'
+    filepath   = sys.argv[1] if len(sys.argv) > 1 else '../tmp/大阪フォーマット.xlsx'
+    output     = sys.argv[2] if len(sys.argv) > 2 else None
     data = parse_excel(filepath)
 
     print(f"チャネル数: {len(data['categories'])}")
@@ -321,7 +363,7 @@ if __name__ == '__main__':
 
     print(f"\n合計: {total_seats}席")
 
-    out = 'output_test.json'
+    out = output or 'output.json'
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print(f"\nJSON出力: {out}")

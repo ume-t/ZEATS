@@ -13,14 +13,14 @@ body {
   flex-direction: column;
 }
 
-/* ヘッダー */
+/* ── ヘッダー ── */
 #header {
   background: #16213e;
-  padding: 12px 20px;
+  padding: 10px 16px;
   border-bottom: 2px solid #0f3460;
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
@@ -28,12 +28,13 @@ body {
   font-size: 18px;
   color: #e94560;
   white-space: nowrap;
+  letter-spacing: 0.1em;
 }
 
 #controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
   flex: 1;
 }
@@ -46,31 +47,29 @@ body {
 }
 
 .panel-label {
-  font-size: 13px;
+  font-size: 12px;
   color: #aaa;
   white-space: nowrap;
 }
 
 #category-buttons {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
 .cat-btn {
-  padding: 5px 14px;
+  padding: 4px 12px;
   border: 2px solid transparent;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: bold;
   color: #fff;
   transition: transform 0.1s, box-shadow 0.1s;
 }
 
-.cat-btn:hover {
-  transform: scale(1.05);
-}
+.cat-btn:hover { transform: scale(1.05); }
 
 .cat-btn.active {
   border-color: #fff;
@@ -79,51 +78,88 @@ body {
 
 #action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   margin-left: auto;
 }
 
 #action-buttons button {
-  padding: 5px 12px;
+  padding: 4px 10px;
   border: 1px solid #0f3460;
   border-radius: 4px;
   background: #0f3460;
   color: #e0e0e0;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
   transition: background 0.15s;
 }
 
-#action-buttons button:hover {
-  background: #1a4a8a;
+#action-buttons button:hover { background: #1a4a8a; }
+
+/* ── シートタブ ── */
+#sheet-tabs {
+  display: flex;
+  gap: 2px;
+  background: #0d1b35;
+  padding: 6px 16px 0;
+  border-bottom: 2px solid #0f3460;
+  flex-wrap: wrap;
 }
 
-/* メインレイアウト */
+#sheet-tabs.hidden { display: none; }
+
+.sheet-tab {
+  padding: 6px 16px;
+  border-radius: 4px 4px 0 0;
+  background: #16213e;
+  color: #888;
+  cursor: pointer;
+  font-size: 12px;
+  border: 1px solid #0f3460;
+  border-bottom: none;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.sheet-tab:hover { color: #ccc; }
+
+.sheet-tab.active {
+  background: #1a1a2e;
+  color: #e94560;
+  font-weight: bold;
+}
+
+/* ── メインレイアウト ── */
 #main {
   display: flex;
   flex: 1;
-  gap: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
-/* 座席エリア */
 #layout-area {
   flex: 1;
-  padding: 24px;
+  padding: 16px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── 通常グリッドモード ── */
+#grid-mode {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  overflow: auto;
+  gap: 12px;
 }
 
 #stage-label {
   background: #0f3460;
   color: #e94560;
   font-weight: bold;
-  font-size: 14px;
-  padding: 8px 40px;
+  font-size: 13px;
+  padding: 6px 32px;
   border-radius: 4px;
   letter-spacing: 0.1em;
 }
@@ -157,16 +193,6 @@ body {
   box-shadow: 0 0 8px rgba(255,255,255,0.3);
 }
 
-.seat.empty {
-  background: #2a2a4a;
-  border-color: rgba(255,255,255,0.1);
-}
-
-.seat.selected-highlight {
-  box-shadow: 0 0 0 2px #fff;
-}
-
-/* 座席が通路の場合（空セル） */
 .seat.aisle {
   background: transparent;
   border-color: transparent;
@@ -174,7 +200,6 @@ body {
   pointer-events: none;
 }
 
-/* 行ラベル */
 .row-label {
   width: 20px;
   height: 36px;
@@ -185,83 +210,176 @@ body {
   color: #888;
 }
 
-/* サイドバー */
+/* ── ブロックモード（Excelインポート時） ── */
+#block-mode { flex-direction: column; gap: 12px; }
+#block-mode.hidden { display: none; }
+
+#block-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#block-search {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  color: #e0e0e0;
+  padding: 6px 12px;
+  font-size: 13px;
+  width: 280px;
+  outline: none;
+}
+
+#block-search:focus { border-color: #e94560; }
+
+#block-count-label {
+  font-size: 12px;
+  color: #888;
+}
+
+#block-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.block-card {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  padding: 10px 12px;
+  min-width: 180px;
+  max-width: 360px;
+  flex: 0 0 auto;
+}
+
+.block-card-name {
+  font-size: 11px;
+  font-weight: bold;
+  color: #e94560;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #0f3460;
+  padding-bottom: 4px;
+}
+
+.block-row {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 3px;
+  align-items: center;
+}
+
+.block-row-label {
+  font-size: 9px;
+  color: #666;
+  width: 20px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.block-seat {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.12);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  font-weight: bold;
+  color: rgba(0,0,0,0.7);
+  background: #2a2a4a;
+  transition: transform 0.08s, box-shadow 0.08s;
+  position: relative;
+}
+
+.block-seat:hover {
+  transform: scale(1.2);
+  z-index: 10;
+  box-shadow: 0 0 6px rgba(255,255,255,0.4);
+}
+
+.block-seat[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* ── サイドバー ── */
 #sidebar {
   width: 220px;
   min-width: 220px;
   background: #16213e;
   border-left: 2px solid #0f3460;
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   overflow-y: auto;
 }
 
 #sidebar h2 {
-  font-size: 14px;
+  font-size: 13px;
   color: #e94560;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   border-bottom: 1px solid #0f3460;
-  padding-bottom: 6px;
+  padding-bottom: 5px;
 }
 
-/* 集計パネル */
-#summary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+#summary-list { display: flex; flex-direction: column; gap: 5px; }
 
 .summary-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 7px;
+  font-size: 12px;
 }
 
 .summary-color-dot {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   border-radius: 2px;
   flex-shrink: 0;
 }
 
-.summary-name {
-  flex: 1;
-  color: #ccc;
-}
+.summary-name { flex: 1; color: #ccc; }
 
 .summary-count {
   font-weight: bold;
   color: #e0e0e0;
-  min-width: 30px;
+  min-width: 28px;
   text-align: right;
 }
 
 #total-count {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 7px;
+  padding-top: 7px;
   border-top: 1px solid #0f3460;
-  font-size: 13px;
+  font-size: 12px;
   color: #aaa;
   text-align: right;
 }
 
-/* チケットパネル */
-#ticket-format {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-}
+#ticket-format { display: flex; flex-direction: column; gap: 7px; margin-bottom: 9px; }
 
 #ticket-format label {
-  font-size: 12px;
+  font-size: 11px;
   color: #aaa;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 #ticket-format input {
@@ -271,36 +389,34 @@ body {
   border-radius: 3px;
   color: #e0e0e0;
   padding: 3px 6px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 #btn-assign-tickets {
   width: 100%;
-  padding: 7px;
+  padding: 6px;
   background: #e94560;
   border: none;
   border-radius: 4px;
   color: #fff;
   font-weight: bold;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   transition: background 0.15s;
 }
 
-#btn-assign-tickets:hover {
-  background: #c73550;
-}
+#btn-assign-tickets:hover { background: #c73550; }
 
 #ticket-preview {
-  margin-top: 10px;
-  font-size: 11px;
+  margin-top: 8px;
+  font-size: 10px;
   color: #888;
   line-height: 1.6;
   max-height: 120px;
   overflow-y: auto;
 }
 
-/* コンテキストメニュー */
+/* ── コンテキストメニュー ── */
 #context-menu {
   position: fixed;
   background: #16213e;
@@ -312,27 +428,21 @@ body {
   overflow: hidden;
 }
 
-#context-menu.hidden {
-  display: none;
-}
+#context-menu.hidden { display: none; }
 
-#context-menu-list {
-  list-style: none;
-}
+#context-menu-list { list-style: none; }
 
 #context-menu-list li {
-  padding: 9px 16px;
+  padding: 8px 14px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   transition: background 0.1s;
 }
 
-#context-menu-list li:hover {
-  background: #0f3460;
-}
+#context-menu-list li:hover { background: #0f3460; }
 
 .ctx-color-dot {
   width: 10px;
@@ -341,22 +451,19 @@ body {
   flex-shrink: 0;
 }
 
-/* トースト通知 */
+/* ── トースト ── */
 #toast {
   position: fixed;
-  bottom: 24px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   background: #0f3460;
   color: #e0e0e0;
-  padding: 10px 20px;
+  padding: 8px 18px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.5);
   z-index: 2000;
-  transition: opacity 0.3s;
 }
 
-#toast.hidden {
-  display: none;
-}
+#toast.hidden { display: none; }
