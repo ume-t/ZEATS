@@ -36,8 +36,9 @@ const dragPaint = {
 // Shift+クリック範囲選択のアンカー
 let shiftAnchor = { seatId: null, action: null };
 
-// Undo スタック
+// Undo / Redo スタック
 const undoStack = [];
+const redoStack = [];
 const UNDO_MAX  = 50;
 let gestureSnapshot = null;
 
@@ -50,17 +51,18 @@ function pushUndo(before) {
   if (JSON.stringify(before) === JSON.stringify(takeSnapshot())) return;
   undoStack.push(before);
   if (undoStack.length > UNDO_MAX) undoStack.shift();
-  updateUndoButton();
+  redoStack.length = 0; // 新しい操作で Redo 履歴をクリア
+  updateHistoryButtons();
 }
 
-function updateUndoButton() {
-  const btn = document.getElementById('btn-undo');
-  if (btn) btn.disabled = undoStack.length === 0;
+function updateHistoryButtons() {
+  const u = document.getElementById('btn-undo');
+  const r = document.getElementById('btn-redo');
+  if (u) u.disabled = undoStack.length === 0;
+  if (r) r.disabled = redoStack.length === 0;
 }
 
-function undo() {
-  if (!undoStack.length) return;
-  const snapshot = undoStack.pop();
+function restoreSnapshot(snapshot) {
   if (state.mode === 'import') {
     state.activeSeatsDirty = snapshot;
     renderBlockView(document.getElementById('block-search').value);
@@ -71,8 +73,21 @@ function undo() {
     );
   }
   renderSummary();
-  updateUndoButton();
+  updateHistoryButtons();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(takeSnapshot());
+  restoreSnapshot(undoStack.pop());
   showToast('1つ戻りました');
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(takeSnapshot());
+  restoreSnapshot(redoStack.pop());
+  showToast('1つ進みました');
 }
 
 // ──────────────────────────────────────────────
@@ -256,7 +271,8 @@ function switchSheet(name) {
   state.activeSheetName = name;
   state.activeSeatsDirty = {};
   undoStack.length = 0;
-  updateUndoButton();
+  redoStack.length = 0;
+  updateHistoryButtons();
   renderSheetTabs();
   renderBlockView();
   renderSummary();
@@ -524,6 +540,7 @@ document.addEventListener('click', hideContextMenu);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') hideContextMenu();
   if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
 });
 
 // ──────────────────────────────────────────────
@@ -764,6 +781,7 @@ function bindActions() {
   });
 
   document.getElementById('btn-undo').addEventListener('click', undo);
+  document.getElementById('btn-redo').addEventListener('click', redo);
 
   document.getElementById('btn-reset-all').addEventListener('click', () => {
     if (!confirm('全ての区分・チケット番号をリセットしますか？')) return;
