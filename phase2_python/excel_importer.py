@@ -382,6 +382,46 @@ def parse_excel(filepath: str) -> dict:
     return result
 
 
+def get_seat_cell_map(filepath: str) -> dict[str, tuple[str, int, int]]:
+    """
+    Excelファイルを再走査し {seat_id: (sheet_name, row, col)} を返す。
+    seat_colorizer から座席セルの位置を特定するために使用する。
+    """
+    wb = openpyxl.load_workbook(filepath, data_only=False)
+    _duplicate_re = re.compile(r'\s+\(\d+\)$')
+    _base_names = set(wb.sheetnames)
+
+    def _is_dup(name: str) -> bool:
+        m = _duplicate_re.search(name)
+        return bool(m) and name[:m.start()] in _base_names
+
+    cell_map: dict[str, tuple[str, int, int]] = {}
+    for sheet_name in wb.sheetnames:
+        if _is_dup(sheet_name):
+            continue
+        ws = wb[sheet_name]
+        short_name     = SHEET_SHORT_NAMES.get(sheet_name, sheet_name)
+        block_headers  = _find_block_headers(ws)
+        row_labels     = _find_row_labels(ws)
+        section_headers = _find_section_headers(ws)
+
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.column <= 3 or not _is_seat_value(cell.value):
+                    continue
+                row_num = row_labels.get(cell.row)
+                if row_num is None:
+                    continue
+                block = _resolve_block(cell.row, cell.column,
+                                       block_headers, section_headers)
+                if block is None:
+                    continue
+                seat_id = f"{short_name}_{block}_{row_num}列_{int(cell.value)}番"
+                cell_map[seat_id] = (sheet_name, cell.row, cell.column)
+
+    return cell_map
+
+
 if __name__ == '__main__':
     import sys
 

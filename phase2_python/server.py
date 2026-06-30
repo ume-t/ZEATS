@@ -30,6 +30,7 @@ from color_saver import apply_colors_to_excel
 from excel_exporter import export_excel
 from excel_importer import parse_excel
 from pdf_exporter import export_pdf
+from seat_colorizer import apply_seat_and_legend_colors
 
 app = Flask(__name__)
 
@@ -92,6 +93,7 @@ def export_excel_preflight() -> Response:
 def export_excel_endpoint() -> Response:
     """
     JSON ボディを受け取り、色付き Excel ファイルを返す。
+    元ファイルが保持されている場合はそれをベースに座席色を適用する。
     """
     data = request.get_json(silent=True)
     if data is None:
@@ -101,7 +103,11 @@ def export_excel_endpoint() -> Response:
         tmp_path = tmp.name
 
     try:
-        export_excel(data, tmp_path)
+        src = _last_imported['path']
+        if src and os.path.exists(src):
+            apply_seat_and_legend_colors(src, tmp_path, data)
+        else:
+            export_excel(data, tmp_path)
         with open(tmp_path, 'rb') as f:
             xlsx_bytes = f.read()
     finally:
