@@ -36,6 +36,45 @@ const dragPaint = {
 // Shift+クリック範囲選択のアンカー
 let shiftAnchor = { seatId: null, action: null };
 
+// Undo スタック
+const undoStack = [];
+const UNDO_MAX  = 50;
+let gestureSnapshot = null;
+
+function takeSnapshot() {
+  const src = state.mode === 'import' ? state.activeSeatsDirty : state.seats;
+  return Object.fromEntries(Object.entries(src).map(([k, v]) => [k, { ...v }]));
+}
+
+function pushUndo(before) {
+  if (JSON.stringify(before) === JSON.stringify(takeSnapshot())) return;
+  undoStack.push(before);
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  updateUndoButton();
+}
+
+function updateUndoButton() {
+  const btn = document.getElementById('btn-undo');
+  if (btn) btn.disabled = undoStack.length === 0;
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  const snapshot = undoStack.pop();
+  if (state.mode === 'import') {
+    state.activeSeatsDirty = snapshot;
+    renderBlockView(document.getElementById('block-search').value);
+  } else {
+    state.seats = snapshot;
+    document.querySelectorAll('.seat[data-seat-id]').forEach(cell =>
+      applyGridSeatStyle(cell, cell.dataset.seatId)
+    );
+  }
+  renderSummary();
+  updateUndoButton();
+  showToast('元に戻しました');
+}
+
 // ──────────────────────────────────────────────
 // アプリ状態
 // ──────────────────────────────────────────────
@@ -216,6 +255,8 @@ function renderSheetTabs() {
 function switchSheet(name) {
   state.activeSheetName = name;
   state.activeSeatsDirty = {};
+  undoStack.length = 0;
+  updateUndoButton();
   renderSheetTabs();
   renderBlockView();
   renderSummary();
@@ -275,8 +316,10 @@ function renderBlockView(filterText = '') {
           if (e.button !== 0) return;
           e.preventDefault();
           hideContextMenu();
+          gestureSnapshot = takeSnapshot();
           if (e.shiftKey && shiftAnchor.seatId) {
             applyShiftRangeBlock(shiftAnchor.seatId, seatId, shiftAnchor.action);
+            pushUndo(gestureSnapshot);
             return;
           }
           const s = currentSeats();
@@ -367,8 +410,10 @@ function renderGrid() {
           if (e.button !== 0) return;
           e.preventDefault();
           hideContextMenu();
+          gestureSnapshot = takeSnapshot();
           if (e.shiftKey && shiftAnchor.seatId) {
             applyShiftRangeGrid(shiftAnchor.seatId, seatId, shiftAnchor.action);
+            pushUndo(gestureSnapshot);
             return;
           }
           const action = (state.activeCategoryId === '__erase__' || state.seats[seatId]?.categoryId)
@@ -476,7 +521,10 @@ function hideContextMenu() {
 }
 
 document.addEventListener('click', hideContextMenu);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') hideContextMenu(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') hideContextMenu();
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+});
 
 // ──────────────────────────────────────────────
 // 集計パネル
@@ -710,8 +758,12 @@ function bindActions() {
     if (!dragPaint.active) return;
     dragPaint.active = false;
     dragPaint.action = null;
+    pushUndo(gestureSnapshot);
+    gestureSnapshot = null;
     renderSummary();
   });
+
+  document.getElementById('btn-undo').addEventListener('click', undo);
 
   document.getElementById('btn-reset-all').addEventListener('click', () => {
     if (!confirm('全ての区分・チケット番号をリセットしますか？')) return;
