@@ -33,6 +33,9 @@ const dragPaint = {
   action: null, // 'assign' | 'erase'
 };
 
+// Shift+クリック範囲選択のアンカー
+let shiftAnchor = { seatId: null, action: null };
+
 // ──────────────────────────────────────────────
 // アプリ状態
 // ──────────────────────────────────────────────
@@ -272,10 +275,16 @@ function renderBlockView(filterText = '') {
           if (e.button !== 0) return;
           e.preventDefault();
           hideContextMenu();
+          if (e.shiftKey && shiftAnchor.seatId) {
+            applyShiftRangeBlock(shiftAnchor.seatId, seatId, shiftAnchor.action);
+            return;
+          }
           const s = currentSeats();
-          dragPaint.action = (state.activeCategoryId === '__erase__' || s[seatId]?.categoryId)
+          const action = (state.activeCategoryId === '__erase__' || s[seatId]?.categoryId)
             ? 'erase' : 'assign';
+          dragPaint.action = action;
           dragPaint.active = true;
+          shiftAnchor = { seatId, action };
           applyDragBlock(seatId, seatEl);
         });
         seatEl.addEventListener('mouseover', () => {
@@ -317,6 +326,20 @@ function applyDragBlock(seatId, el) {
   applyBlockSeatStyle(el, seatId, currentSeats());
 }
 
+function applyShiftRangeBlock(fromId, toId, action) {
+  const all = [...document.querySelectorAll('#block-cards .block-seat[data-seat-id]')];
+  const fi = all.findIndex(el => el.dataset.seatId === fromId);
+  const ti = all.findIndex(el => el.dataset.seatId === toId);
+  if (fi === -1 || ti === -1) return;
+  const [lo, hi] = [Math.min(fi, ti), Math.max(fi, ti)];
+  all.slice(lo, hi + 1).forEach(el => {
+    const sid = el.dataset.seatId;
+    if (action === 'erase') eraseSeat(sid); else setSeat(sid, state.activeCategoryId);
+    applyBlockSeatStyle(el, sid, currentSeats());
+  });
+  renderSummary();
+}
+
 // ──────────────────────────────────────────────
 // 手動グリッド描画
 // ──────────────────────────────────────────────
@@ -344,9 +367,15 @@ function renderGrid() {
           if (e.button !== 0) return;
           e.preventDefault();
           hideContextMenu();
-          dragPaint.action = (state.activeCategoryId === '__erase__' || state.seats[seatId]?.categoryId)
+          if (e.shiftKey && shiftAnchor.seatId) {
+            applyShiftRangeGrid(shiftAnchor.seatId, seatId, shiftAnchor.action);
+            return;
+          }
+          const action = (state.activeCategoryId === '__erase__' || state.seats[seatId]?.categoryId)
             ? 'erase' : 'assign';
+          dragPaint.action = action;
           dragPaint.active = true;
+          shiftAnchor = { seatId, action };
           applyDragGrid(seatId, cell);
         });
         cell.addEventListener('mouseover', () => {
@@ -384,6 +413,20 @@ function applyDragGrid(seatId, cell) {
     setSeat(seatId, state.activeCategoryId);
   }
   applyGridSeatStyle(cell, seatId);
+}
+
+function applyShiftRangeGrid(fromId, toId, action) {
+  const all = [...document.querySelectorAll('#seat-grid .seat[data-seat-id]')];
+  const fi = all.findIndex(el => el.dataset.seatId === fromId);
+  const ti = all.findIndex(el => el.dataset.seatId === toId);
+  if (fi === -1 || ti === -1) return;
+  const [lo, hi] = [Math.min(fi, ti), Math.max(fi, ti)];
+  all.slice(lo, hi + 1).forEach(el => {
+    const sid = el.dataset.seatId;
+    if (action === 'erase') eraseSeat(sid); else setSeat(sid, state.activeCategoryId);
+    applyGridSeatStyle(el, sid);
+  });
+  renderSummary();
 }
 
 // ──────────────────────────────────────────────
