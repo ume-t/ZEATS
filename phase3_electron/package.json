@@ -1,0 +1,43 @@
+{
+  "name": "zeats",
+  "version": "0.1.0",
+  "description": "ZEATS - 座席管理・チケット採番アプリ",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.zeats.app",
+    "productName": "ZEATS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraFiles": [
+      {
+        "from": "../phase1_ui",
+        "to": "phase1_ui",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../phase2_python",
+        "to": "phase2_python",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

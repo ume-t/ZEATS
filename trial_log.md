@@ -5,6 +5,34 @@
 
 ---
 
+## 2026-06-30 — セッション5
+
+### やったこと
+- `phase3_electron/` を新規作成（Issue #4）
+  - `package.json`: Electronアプリ定義・electron-builder設定（extraFilesでphase1_ui/phase2_pythonを同梱）
+  - `main.js`: `conda run -n zeats python server.py PORT` を子プロセスで起動、
+    TCPポーリング（net.Socket）でサーバー起動を待機してから BrowserWindow を生成。
+    `before-quit` で子プロセスを kill。`webSecurity: false` で file://→http://localhost fetch を許可。
+  - `preload.js`: `contextBridge.exposeInMainWorld('zeatsAPI', { serverUrl: '...' })` でサーバーURL公開
+- `phase1_ui/index.html`: Electron専用ボタンを追加（初期 `display:none`）
+  - 「Excelを直接インポート」「Excel出力」「PDF出力」
+- `phase1_ui/app.js`: `window.zeatsAPI` 検出時にElectronボタンを表示・バインド
+  - `importExcelFromServer()`: multipart POST → /import-excel → JSON → 既存importロジックと同じフローに接続
+  - `exportFromServer()`: import モード時のみ動作、JSON POST → /export-excel or /export-pdf → Blob ダウンロード
+- Issue #4 Close、`dev` にプッシュ
+
+### 結果
+- Issue #1〜#4 すべて完了
+- Electron起動時のフロー: main.js → Python子プロセス起動 → ポート待機 → BrowserWindow（phase1_ui/index.html）
+- ブラウザ単独でも動作継続（window.zeatsAPI がなければElectronボタンは非表示）
+
+### 次のアクション
+- Issue #1〜#4 完了済み → dev → main マージ（ユーザーの指示待ち）
+- ローカルでの動作確認: `cd phase3_electron && npm install && npm start`
+- conda が PATH にない環境向けに `CONDA_EXE` 環境変数のセットアップを確認
+
+---
+
 ## 2026-06-30 — セッション4
 
 ### やったこと
