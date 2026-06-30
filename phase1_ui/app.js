@@ -619,6 +619,112 @@ function bindActions() {
   document.getElementById('block-search').addEventListener('input', e =>
     renderBlockView(e.target.value)
   );
+
+  // Electron環境のみ: Python サーバー連携ボタンを表示
+  if (window.zeatsAPI) {
+    document.getElementById('electron-buttons').style.display = '';
+    bindElectronButtons(window.zeatsAPI.serverUrl);
+  }
+}
+
+// ──────────────────────────────────────────────
+// Electron: Python サーバー連携
+// ──────────────────────────────────────────────
+function bindElectronButtons(serverUrl) {
+  document.getElementById('btn-import-excel-direct').addEventListener('click', () =>
+    document.getElementById('import-excel-direct-input').click()
+  );
+  document.getElementById('import-excel-direct-input').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) await importExcelFromServer(file, serverUrl);
+  });
+
+  document.getElementById('btn-export-excel').addEventListener('click', () =>
+    exportFromServer(serverUrl, 'excel')
+  );
+  document.getElementById('btn-export-pdf').addEventListener('click', () =>
+    exportFromServer(serverUrl, 'pdf')
+  );
+}
+
+async function importExcelFromServer(file, serverUrl) {
+  try {
+    showToast('Excelをインポート中...');
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${serverUrl}/import-excel`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    if (!data.version || !data.sheets || !data.categories) throw new Error('フォーマット不正');
+
+    CATEGORIES = data.categories;
+    initCategories();
+    if (!CATEGORIES.find(c => c.id === state.activeCategoryId)) {
+      state.activeCategoryId = CATEGORIES[0]?.id || null;
+      setActiveCategory(state.activeCategoryId);
+    }
+    state.sheetsData       = data.sheets;
+    state.activeSheetName  = Object.keys(data.sheets)[0];
+    state.activeSeatsDirty = {};
+    if (data.ticketConfig) {
+      document.getElementById('ticket-prefix').value = data.ticketConfig.prefix || 'A';
+      document.getElementById('ticket-start').value  = data.ticketConfig.startNum || 1;
+    }
+    setMode('import');
+    renderSheetTabs();
+    renderBlockView();
+    renderSummary();
+    document.getElementById('ticket-preview').textContent = '';
+    showToast(`Excelをインポートしました（${Object.keys(data.sheets).length}シート）`);
+  } catch (err) {
+    alert('Excelインポートに失敗しました: ' + err.message);
+  }
+}
+
+async function exportFromServer(serverUrl, type) {
+  if (state.mode !== 'import') {
+    alert('Excel/PDF出力はExcelインポートモードでのみ使用できます。\nまず「Excelを直接インポート」でファイルを読み込んでください。');
+    return;
+  }
+  try {
+    const label    = type === 'excel' ? 'Excel' : 'PDF';
+    const endpoint = type === 'excel' ? '/export-excel' : '/export-pdf';
+    const filename = type === 'excel' ? 'seat-layout.xlsx' : 'seat-layout.pdf';
+    showToast(`${label}を出力中...`);
+
+    const mergedSheets = {};
+    Object.entries(state.sheetsData).forEach(([name, sheet]) => {
+      const mergedSeats = name === state.activeSheetName
+        ? { ...sheet.seats, ...state.activeSeatsDirty }
+        : { ...sheet.seats };
+      mergedSheets[name] = { ...sheet, seats: mergedSeats };
+    });
+    const payload = { version: 1, categories: CATEGORIES, sheets: mergedSheets };
+
+    const res = await fetch(`${serverUrl}${endpoint}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`${label}を出力しました`);
+  } catch (err) {
+    alert(`出力に失敗しました: ${err.message}`);
+  }
 }
 
 // ──────────────────────────────────────────────
