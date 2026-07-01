@@ -43,7 +43,7 @@ const UNDO_MAX  = 50;
 let gestureSnapshot = null;
 
 function takeSnapshot() {
-  const src = state.mode === 'import' ? state.activeSeatsDirty : state.seats;
+  const src = state.mode === 'import' ? activeDirty() : state.seats;
   return Object.fromEntries(Object.entries(src).map(([k, v]) => [k, { ...v }]));
 }
 
@@ -64,7 +64,7 @@ function updateHistoryButtons() {
 
 function restoreSnapshot(snapshot) {
   if (state.mode === 'import') {
-    state.activeSeatsDirty = snapshot;
+    state.dirtyBySheet[state.activeSheetName] = snapshot;
     renderBlockView(document.getElementById('block-search').value);
   } else {
     state.seats = snapshot;
@@ -104,7 +104,7 @@ const state = {
   // --- インポートモード ---
   sheetsData: {},        // { シート名: { name, shortName, seats, blocks } }
   activeSheetName: null,
-  activeSeatsDirty: {},  // インポートモードでの変更 { seatId: { categoryId, ticketNo } }
+  dirtyBySheet: {},      // インポートモードでの変更 { シート名: { seatId: {categoryId, ticketNo} } }
 
   // --- 共通 ---
   activeCategoryId: CATEGORIES[0].id,
@@ -203,12 +203,21 @@ function setActiveCategory(id) {
 }
 
 // ──────────────────────────────────────────────
+// 現在シートの dirty dict を返す（なければ初期化）
+// ──────────────────────────────────────────────
+function activeDirty() {
+  const name = state.activeSheetName;
+  if (!state.dirtyBySheet[name]) state.dirtyBySheet[name] = {};
+  return state.dirtyBySheet[name];
+}
+
+// ──────────────────────────────────────────────
 // 現在のシートの seats を返すヘルパー
 // ──────────────────────────────────────────────
 function currentSeats() {
   if (state.mode === 'import') {
     const base = state.sheetsData[state.activeSheetName]?.seats || {};
-    return { ...base, ...state.activeSeatsDirty };
+    return { ...base, ...activeDirty() };
   }
   return state.seats;
 }
@@ -218,13 +227,13 @@ function currentSeats() {
 // ──────────────────────────────────────────────
 function setSeat(seatId, categoryId) {
   if (state.mode === 'import') {
-    if (!state.activeSeatsDirty[seatId]) {
-      // ベースからコピーして上書き
+    const dirty = activeDirty();
+    if (!dirty[seatId]) {
       const base = state.sheetsData[state.activeSheetName]?.seats?.[seatId] || {};
-      state.activeSeatsDirty[seatId] = { ...base };
+      dirty[seatId] = { ...base };
     }
-    state.activeSeatsDirty[seatId].categoryId = categoryId;
-    state.activeSeatsDirty[seatId].ticketNo   = null;
+    dirty[seatId].categoryId = categoryId;
+    dirty[seatId].ticketNo   = null;
   } else {
     if (!state.seats[seatId]) state.seats[seatId] = {};
     state.seats[seatId].categoryId = categoryId;
@@ -234,7 +243,7 @@ function setSeat(seatId, categoryId) {
 
 function eraseSeat(seatId) {
   if (state.mode === 'import') {
-    state.activeSeatsDirty[seatId] = { categoryId: null, ticketNo: null };
+    activeDirty()[seatId] = { categoryId: null, ticketNo: null };
   } else {
     delete state.seats[seatId];
   }
@@ -269,7 +278,6 @@ function renderSheetTabs() {
 
 function switchSheet(name) {
   state.activeSheetName = name;
-  state.activeSeatsDirty = {};
   undoStack.length = 0;
   redoStack.length = 0;
   updateHistoryButtons();
@@ -633,10 +641,11 @@ function assignTickets() {
         rowSeats.forEach(seatId => {
           if (seats[seatId]?.categoryId) {
             const ticketNo = `${prefix}${String(num).padStart(3, '0')}`;
-            if (!state.activeSeatsDirty[seatId]) {
-              state.activeSeatsDirty[seatId] = { ...seats[seatId] };
+            const dirty = activeDirty();
+            if (!dirty[seatId]) {
+              dirty[seatId] = { ...seats[seatId] };
             }
-            state.activeSeatsDirty[seatId].ticketNo = ticketNo;
+            dirty[seatId].ticketNo = ticketNo;
             preview.push(`${seatId} → ${ticketNo}`);
             num++;
           }
@@ -693,7 +702,7 @@ function bindActions() {
     if (state.mode === 'import') {
       // ベースの全座席に categoryId: null を上書きするdirtyを作成
       const allSeats = state.sheetsData[state.activeSheetName]?.seats || {};
-      state.activeSeatsDirty = Object.fromEntries(
+      state.dirtyBySheet[state.activeSheetName] = Object.fromEntries(
         Object.keys(allSeats).map(id => [id, { categoryId: null, ticketNo: null }])
       );
       renderBlockView(document.getElementById('block-search').value);
@@ -763,9 +772,9 @@ async function importExcelFromServer(file, serverUrl) {
       state.activeCategoryId = CATEGORIES[0]?.id || null;
       setActiveCategory(state.activeCategoryId);
     }
-    state.sheetsData       = data.sheets;
-    state.activeSheetName  = Object.keys(data.sheets)[0];
-    state.activeSeatsDirty = {};
+    state.sheetsData      = data.sheets;
+    state.activeSheetName = Object.keys(data.sheets)[0];
+    state.dirtyBySheet    = {};
     if (data.ticketConfig) {
       document.getElementById('ticket-prefix').value = data.ticketConfig.prefix || 'A';
       document.getElementById('ticket-start').value  = data.ticketConfig.startNum || 1;
@@ -794,9 +803,7 @@ async function exportFromServer(serverUrl, type) {
 
     const mergedSheets = {};
     Object.entries(state.sheetsData).forEach(([name, sheet]) => {
-      const mergedSeats = name === state.activeSheetName
-        ? { ...sheet.seats, ...state.activeSeatsDirty }
-        : { ...sheet.seats };
+      const mergedSeats = { ...sheet.seats, ...(state.dirtyBySheet[name] || {}) };
       mergedSheets[name] = { ...sheet, seats: mergedSeats };
     });
     const payload = { version: 1, categories: CATEGORIES, sheets: mergedSheets };
