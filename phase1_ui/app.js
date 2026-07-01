@@ -641,132 +641,6 @@ function assignTickets() {
 }
 
 // ──────────────────────────────────────────────
-// JSON エクスポート
-// ──────────────────────────────────────────────
-function exportJSON() {
-  let data;
-  if (state.mode === 'import') {
-    // 変更をマージして全シートを出力
-    const mergedSheets = {};
-    Object.entries(state.sheetsData).forEach(([name, sheet]) => {
-      const mergedSeats = name === state.activeSheetName
-        ? { ...sheet.seats, ...state.activeSeatsDirty }
-        : { ...sheet.seats };
-      mergedSheets[name] = { ...sheet, seats: mergedSeats };
-    });
-    data = {
-      version:      1,
-      exportedAt:   new Date().toISOString(),
-      categories:   CATEGORIES,
-      sheets:       mergedSheets,
-      ticketConfig: {
-        prefix:   document.getElementById('ticket-prefix').value,
-        startNum: parseInt(document.getElementById('ticket-start').value, 10),
-      },
-    };
-  } else {
-    data = {
-      version:      1,
-      exportedAt:   new Date().toISOString(),
-      categories:   CATEGORIES,
-      layout:       state.layout,
-      seats:        state.seats,
-      ticketConfig: {
-        prefix:   document.getElementById('ticket-prefix').value,
-        startNum: parseInt(document.getElementById('ticket-start').value, 10),
-      },
-    };
-  }
-
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `zeats-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('JSONをエクスポートしました');
-}
-
-// ──────────────────────────────────────────────
-// JSON インポート
-// ──────────────────────────────────────────────
-
-// Excel変換JSONの読み込み（シート + ブロック構造）
-function importExcelJSON(file) {
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!data.version || !data.sheets || !data.categories) throw new Error('フォーマット不正');
-
-      CATEGORIES = data.categories;
-      initCategories();
-      if (!CATEGORIES.find(c => c.id === state.activeCategoryId)) {
-        state.activeCategoryId = CATEGORIES[0]?.id || null;
-        setActiveCategory(state.activeCategoryId);
-      }
-
-      state.sheetsData = data.sheets;
-      state.activeSheetName = Object.keys(data.sheets)[0];
-      state.activeSeatsDirty = {};
-
-      if (data.ticketConfig) {
-        document.getElementById('ticket-prefix').value  = data.ticketConfig.prefix || 'A';
-        document.getElementById('ticket-start').value   = data.ticketConfig.startNum || 1;
-      }
-
-      setMode('import');
-      renderSheetTabs();
-      renderBlockView();
-      renderSummary();
-      document.getElementById('ticket-preview').textContent = '';
-      showToast(`Excelデータを読み込みました（${Object.keys(data.sheets).length}シート）`);
-    } catch (err) {
-      alert('JSONの読み込みに失敗しました: ' + err.message);
-    }
-  };
-  reader.readAsText(file);
-}
-
-// 作業JSONの読み込み（手動モード or 保存済みインポートモード）
-function importWorkJSON(file) {
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!data.version) throw new Error('フォーマット不正');
-
-      if (data.sheets) {
-        // インポートモード形式
-        importExcelJSON(file);
-        return;
-      }
-
-      // 手動モード形式（layout + seats）
-      if (!data.seats || !data.layout) throw new Error('フォーマット不正');
-      if (data.categories) {
-        CATEGORIES = data.categories;
-        initCategories();
-      }
-      state.layout = data.layout;
-      state.seats  = data.seats;
-      if (data.ticketConfig) {
-        document.getElementById('ticket-prefix').value  = data.ticketConfig.prefix || 'A';
-        document.getElementById('ticket-start').value   = data.ticketConfig.startNum || 1;
-      }
-      setMode('manual');
-      renderGrid();
-      renderSummary();
-      showToast('作業JSONを読み込みました');
-    } catch (err) {
-      alert('JSONの読み込みに失敗しました: ' + err.message);
-    }
-  };
-  reader.readAsText(file);
-}
-
-// ──────────────────────────────────────────────
 // ボタンバインド
 // ──────────────────────────────────────────────
 function bindActions() {
@@ -784,9 +658,17 @@ function bindActions() {
   document.getElementById('btn-redo').addEventListener('click', redo);
 
   document.getElementById('btn-reset-all').addEventListener('click', () => {
-    if (!confirm('全ての区分・チケット番号をリセットしますか？')) return;
+    if (!confirm('座席と区分の色をすべて白図面（無色）に戻しますか？')) return;
+    // 区分の色をすべてクリア
+    CATEGORIES.forEach(cat => { cat.color = null; });
+    initCategories();
+    // 座席の区分割り当てをすべてクリア
     if (state.mode === 'import') {
-      state.activeSeatsDirty = {};
+      // ベースの全座席に categoryId: null を上書きするdirtyを作成
+      const allSeats = state.sheetsData[state.activeSheetName]?.seats || {};
+      state.activeSeatsDirty = Object.fromEntries(
+        Object.keys(allSeats).map(id => [id, { categoryId: null, ticketNo: null }])
+      );
       renderBlockView(document.getElementById('block-search').value);
     } else {
       state.seats = {};
@@ -794,25 +676,7 @@ function bindActions() {
     }
     renderSummary();
     document.getElementById('ticket-preview').textContent = '';
-    showToast('リセットしました');
-  });
-
-  document.getElementById('btn-export').addEventListener('click', exportJSON);
-
-  document.getElementById('btn-import-json').addEventListener('click', () =>
-    document.getElementById('import-file-input').click()
-  );
-  document.getElementById('import-file-input').addEventListener('change', e => {
-    if (e.target.files[0]) importExcelJSON(e.target.files[0]);
-    e.target.value = '';
-  });
-
-  document.getElementById('btn-import-excel-json').addEventListener('click', () =>
-    document.getElementById('import-work-input').click()
-  );
-  document.getElementById('import-work-input').addEventListener('change', e => {
-    if (e.target.files[0]) importWorkJSON(e.target.files[0]);
-    e.target.value = '';
+    showToast('白図面にしました');
   });
 
   document.getElementById('btn-assign-tickets').addEventListener('click', assignTickets);
