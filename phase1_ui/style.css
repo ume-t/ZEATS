@@ -300,9 +300,17 @@ body {
 
 #block-cards {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  gap: 16px;
   user-select: none;
+}
+
+.block-tier {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
 .block-card {

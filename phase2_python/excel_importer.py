@@ -276,20 +276,32 @@ def _parse_sheet(ws, short_name: str,
     return seats
 
 
-def _generate_blocks(seats: dict, short_name: str) -> list[dict]:
+def _generate_blocks(seats: dict, short_name: str,
+                     block_headers: list[tuple[int, int, str]]) -> list[dict]:
     """
     seats辞書からブロック別の表示構造を生成する。
 
     Excelの実際の行位置（_row）をキーとして管理し、同一ブロック内に複数の
     ティア（行番号リセット）がある場合も正しく再現する。
 
+    block_headers: _find_block_headers() の戻り値。ブロックのヘッダー行・列位置を
+                   _tier / _hpos に使用することで、アプリ上でのブロック横並び順を
+                   Excel と一致させる。
+
     戻り値:
       [ { "name":    block_name,
-          "rowNums": [row_num, ...],          # 行の「N列」番号（C列ラベル）
-          "rows":    [ [seat_id|None, ...] ]  # Excelの列順（空き=None）
+          "rowNums": [row_num, ...],  # 行の「N列」番号（C列ラベル）
+          "rows":    [ [seat_id|None, ...] ],
+          "_tier":   int,             # 横並びグループ（ブロックヘッダーの行番号）
+          "_hpos":   int,             # ティア内の横順（ブロックヘッダーの列番号）
         }, ... ]
     """
     prefix = short_name + '_'
+    # ブロック名 → (header_row, header_col)
+    header_pos: dict[str, tuple[int, int]] = {
+        name: (row, col) for row, col, name in block_headers
+    }
+
     # block_seat_rows[block][excel_row][col] = seat_id
     block_seat_rows: dict[str, dict[int, dict[int, str]]] = {}
     # block_row_labels[block][excel_row] = row_num (C列ラベル)
@@ -300,9 +312,9 @@ def _generate_blocks(seats: dict, short_name: str) -> list[dict]:
         m = re.search(r'^(.+)_(\d+)列_(\d+)番$', rest)
         if not m:
             continue
-        block    = m.group(1)
-        row_num  = int(m.group(2))
-        col      = seat_info.get('_col', 0)
+        block     = m.group(1)
+        row_num   = int(m.group(2))
+        col       = seat_info.get('_col', 0)
         excel_row = seat_info.get('_row', 0)
         block_seat_rows.setdefault(block, {}).setdefault(excel_row, {})[col] = seat_id
         block_row_labels.setdefault(block, {})[excel_row] = row_num
@@ -326,7 +338,17 @@ def _generate_blocks(seats: dict, short_name: str) -> list[dict]:
             [rows_dict[er].get(c) for c in range(min_col, max_col + 1)]
             for er in sorted_excel_rows
         ]
-        blocks.append({'name': block_name, 'rowNums': row_nums, 'rows': rows})
+
+        # ヘッダー行・列をティア情報として使用（フォールバック: 座席の最小行・列）
+        hdr_row, hdr_col = header_pos.get(block_name,
+                                          (min(sorted_excel_rows), min_col))
+        blocks.append({
+            'name':    block_name,
+            'rowNums': row_nums,
+            'rows':    rows,
+            '_tier':   hdr_row,   # ブロックヘッダーのExcel行 → 横並びグループ
+            '_hpos':   hdr_col,   # ブロックヘッダーのExcel列 → ティア内の横順
+        })
 
     return blocks
 
@@ -403,7 +425,8 @@ def parse_excel(filepath: str) -> dict:
         seats = _parse_sheet(ws, short_name, color_to_id)
         if not seats:
             continue  # 座席0件のシート（全体図・旧バージョンシート等）はスキップ
-        blocks = _generate_blocks(seats, short_name)
+        block_headers = _find_block_headers(ws)
+        blocks = _generate_blocks(seats, short_name, block_headers)
 
         # _col など内部フィールドを除去して公開用 seats を作成
         public_seats = {

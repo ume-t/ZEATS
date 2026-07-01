@@ -298,7 +298,7 @@ function renderBlockView(filterText = '') {
   const container = document.getElementById('block-cards');
   container.innerHTML = '';
 
-  filtered.forEach(block => {
+  function buildBlockCard(block) {
     const card = document.createElement('div');
     card.className = 'block-card';
 
@@ -317,7 +317,6 @@ function renderBlockView(filterText = '') {
       rowEl.appendChild(lbl);
 
       rowSeats.forEach(seatId => {
-        // null = Excelの空きセル
         if (seatId === null) {
           const emptyEl = document.createElement('div');
           emptyEl.className = 'block-seat block-seat--empty';
@@ -357,14 +356,35 @@ function renderBlockView(filterText = '') {
           if (!dragPaint.active) return;
           applyDragBlock(seatId, seatEl);
         });
-        seatEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, seatId, seatEl, true); });
+        seatEl.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          showContextMenu(e.clientX, e.clientY, seatId, seatEl, true);
+        });
         rowEl.appendChild(seatEl);
       });
 
       card.appendChild(rowEl);
     });
+    return card;
+  }
 
-    container.appendChild(card);
+  // _tier でグループ化し、Excelの横並び順（_hpos）に並べる
+  const tierMap = new Map();
+  filtered.forEach(block => {
+    const tier = block._tier ?? 0;
+    if (!tierMap.has(tier)) tierMap.set(tier, []);
+    tierMap.get(tier).push(block);
+  });
+
+  [...tierMap.keys()].sort((a, b) => a - b).forEach(tier => {
+    const tierEl = document.createElement('div');
+    tierEl.className = 'block-tier';
+
+    tierMap.get(tier)
+      .sort((a, b) => (a._hpos ?? 0) - (b._hpos ?? 0))
+      .forEach(block => tierEl.appendChild(buildBlockCard(block)));
+
+    container.appendChild(tierEl);
   });
 }
 
