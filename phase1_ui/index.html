@@ -19,12 +19,7 @@
       <div id="action-buttons">
         <button id="btn-undo" disabled>1つ戻る</button>
         <button id="btn-redo" disabled>1つ進む</button>
-        <button id="btn-reset-all">全リセット</button>
-        <button id="btn-export">JSON出力</button>
-        <button id="btn-import-json">Excelから変換したJSONを読込</button>
-        <input type="file" id="import-file-input" accept=".json" style="display:none">
-        <button id="btn-import-excel-json">作業JSONを読込</button>
-        <input type="file" id="import-work-input" accept=".json" style="display:none">
+        <button id="btn-reset-all">白図面にする</button>
         <!-- Electron専用ボタン（window.zeatsAPI が存在する場合のみ表示） -->
         <span id="electron-buttons" style="display:none">
           <button id="btn-import-excel-direct">Excelを直接インポート</button>
@@ -44,9 +39,13 @@
     <!-- 左: 座席表示エリア -->
     <div id="layout-area">
 
-      <!-- 通常モード: グリッド -->
-      <div id="grid-mode">
-        <div id="stage-label">【ステージ】</div>
+      <!-- 未インポート時のプレースホルダー -->
+      <div id="empty-state">
+        <p>「Excelを直接インポート」からExcelファイルを読み込んでください</p>
+      </div>
+
+      <!-- 通常モード: グリッド（手動モード用・インポート後のみ使用） -->
+      <div id="grid-mode" class="hidden">
         <div id="seat-grid"></div>
       </div>
 

@@ -212,15 +212,17 @@ body {
   gap: 12px;
 }
 
-#stage-label {
-  background: #0f3460;
-  color: #e94560;
-  font-weight: bold;
-  font-size: 13px;
-  padding: 6px 32px;
-  border-radius: 4px;
-  letter-spacing: 0.1em;
+
+#empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #555;
+  font-size: 14px;
 }
+#empty-state.hidden { display: none; }
+#grid-mode.hidden   { display: none; }
 
 #seat-grid {
   display: grid;
@@ -309,8 +311,8 @@ body {
   border-radius: 6px;
   padding: 10px 12px;
   min-width: 180px;
-  max-width: 360px;
   flex: 0 0 auto;
+  overflow-x: auto;
 }
 
 .block-card-name {
@@ -324,6 +326,7 @@ body {
 
 .block-row {
   display: flex;
+  flex-wrap: nowrap;
   gap: 3px;
   margin-bottom: 3px;
   align-items: center;
@@ -352,6 +355,13 @@ body {
   background: #2a2a4a;
   transition: transform 0.08s, box-shadow 0.08s;
   position: relative;
+}
+
+.block-seat--empty {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+  pointer-events: none;
 }
 
 .block-seat:hover {

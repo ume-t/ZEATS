@@ -8,9 +8,11 @@
 """
 import shutil
 import openpyxl
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Font
 
 from excel_importer import get_seat_cell_map
+
+_CATEGORY_SHEET_NAME = '区分'
 
 
 def _hex_to_argb(hex_color: str) -> str:
@@ -23,6 +25,36 @@ def _hex_to_argb(hex_color: str) -> str:
 
 def _make_fill(hex_color: str) -> PatternFill:
     return PatternFill(patternType='solid', fgColor=_hex_to_argb(hex_color))
+
+
+def _add_category_sheet(wb: openpyxl.Workbook, categories: list) -> None:
+    """「区分」シートをワークブックに追加（既存なら上書き）。"""
+    if _CATEGORY_SHEET_NAME in wb.sheetnames:
+        del wb[_CATEGORY_SHEET_NAME]
+    ws = wb.create_sheet(title=_CATEGORY_SHEET_NAME)
+
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 22
+    ws.column_dimensions['C'].width = 12
+
+    bold = Font(bold=True)
+    for hdr, col in (('区分ID', 1), ('区分名', 2), ('色コード', 3)):
+        c = ws.cell(row=1, column=col, value=hdr)
+        c.font = bold
+
+    for r, cat in enumerate(categories, start=2):
+        cat_id    = cat.get('id', '')
+        cat_name  = cat.get('name', cat_id)
+        hex_color = cat.get('color')
+
+        ws.cell(row=r, column=1, value=cat_id)
+        ws.cell(row=r, column=2, value=cat_name)
+        ws.cell(row=r, column=3, value=hex_color or '')
+
+        if hex_color:
+            fill = _make_fill(hex_color)
+            for col in (1, 2):
+                ws.cell(row=r, column=col).fill = fill
 
 
 def apply_seat_and_legend_colors(src_path: str, dst_path: str, data: dict) -> None:
@@ -73,4 +105,5 @@ def apply_seat_and_legend_colors(src_path: str, dst_path: str, data: dict) -> No
             if hex_color:
                 cell.fill = _make_fill(hex_color)
 
+    _add_category_sheet(wb, data.get('categories', []))
     wb.save(dst_path)
