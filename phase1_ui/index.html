@@ -39,8 +39,13 @@
     <!-- 左: 座席表示エリア -->
     <div id="layout-area">
 
-      <!-- 通常モード: グリッド -->
-      <div id="grid-mode">
+      <!-- 未インポート時のプレースホルダー -->
+      <div id="empty-state">
+        <p>「Excelを直接インポート」からExcelファイルを読み込んでください</p>
+      </div>
+
+      <!-- 通常モード: グリッド（手動モード用・インポート後のみ使用） -->
+      <div id="grid-mode" class="hidden">
         <div id="seat-grid"></div>
       </div>
 

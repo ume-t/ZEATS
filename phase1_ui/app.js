@@ -115,7 +115,6 @@ const state = {
 // ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initCategories();
-  renderGrid();
   renderSummary();
   bindActions();
 });
@@ -246,6 +245,7 @@ function eraseSeat(seatId) {
 // ──────────────────────────────────────────────
 function setMode(mode) {
   state.mode = mode;
+  document.getElementById('empty-state').classList.add('hidden');
   document.getElementById('grid-mode').classList.toggle('hidden', mode === 'import');
   document.getElementById('block-mode').classList.toggle('hidden', mode === 'manual');
   document.getElementById('block-mode').style.display = mode === 'import' ? 'flex' : 'none';

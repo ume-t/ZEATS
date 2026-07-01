@@ -213,6 +213,15 @@ body {
 }
 
 
+#empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #555;
+  font-size: 14px;
+}
+
 #seat-grid {
   display: grid;
   gap: 4px;
