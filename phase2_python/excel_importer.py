@@ -270,6 +270,7 @@ def _parse_sheet(ws, short_name: str,
                 'categoryId': channel_id,
                 'ticketNo':   None,
                 '_col':       cell.column,  # Excelの列位置（グリッド配置用・出力時に除去）
+                '_row':       cell.row,     # Excelの行位置（ティア分離用・出力時に除去）
             }
 
     return seats
@@ -279,43 +280,51 @@ def _generate_blocks(seats: dict, short_name: str) -> list[dict]:
     """
     seats辞書からブロック別の表示構造を生成する。
 
-    各行は Excel の列位置を基準にした 2D グリッド。
-    空きセルは None で表現し、Excel の座席配置をそのまま反映する。
+    Excelの実際の行位置（_row）をキーとして管理し、同一ブロック内に複数の
+    ティア（行番号リセット）がある場合も正しく再現する。
 
     戻り値:
       [ { "name":    block_name,
-          "rowNums": [row_num, ...],          # 行の「N列」番号
+          "rowNums": [row_num, ...],          # 行の「N列」番号（C列ラベル）
           "rows":    [ [seat_id|None, ...] ]  # Excelの列順（空き=None）
         }, ... ]
     """
     prefix = short_name + '_'
-    # block_rows[block][row_num][col] = seat_id
-    block_rows: dict[str, dict[int, dict[int, str]]] = {}
+    # block_seat_rows[block][excel_row][col] = seat_id
+    block_seat_rows: dict[str, dict[int, dict[int, str]]] = {}
+    # block_row_labels[block][excel_row] = row_num (C列ラベル)
+    block_row_labels: dict[str, dict[int, int]] = {}
 
     for seat_id, seat_info in seats.items():
         rest = seat_id[len(prefix):]
         m = re.search(r'^(.+)_(\d+)列_(\d+)番$', rest)
         if not m:
             continue
-        block, row_num = m.group(1), int(m.group(2))
-        col = seat_info.get('_col', 0)
-        block_rows.setdefault(block, {}).setdefault(row_num, {})[col] = seat_id
+        block    = m.group(1)
+        row_num  = int(m.group(2))
+        col      = seat_info.get('_col', 0)
+        excel_row = seat_info.get('_row', 0)
+        block_seat_rows.setdefault(block, {}).setdefault(excel_row, {})[col] = seat_id
+        block_row_labels.setdefault(block, {})[excel_row] = row_num
 
     def _natural_key(s: str):
         return [int(t) if t.isdigit() else t for t in re.split(r'(\d+)', s)]
 
     blocks = []
-    for block_name in sorted(block_rows, key=_natural_key):
-        rows_dict = block_rows[block_name]
-        # ブロック内の全列範囲
-        all_cols = [c for row in rows_dict.values() for c in row]
+    for block_name in sorted(block_seat_rows, key=_natural_key):
+        rows_dict = block_seat_rows[block_name]  # {excel_row: {col: seat_id}}
+        labels    = block_row_labels[block_name]  # {excel_row: row_num}
+
+        all_cols = [c for cols in rows_dict.values() for c in cols]
         if not all_cols:
             continue
         min_col, max_col = min(all_cols), max(all_cols)
-        row_nums = sorted(rows_dict)
+
+        sorted_excel_rows = sorted(rows_dict)
+        row_nums = [labels[er] for er in sorted_excel_rows]
         rows = [
-            [rows_dict[rn].get(c) for c in range(min_col, max_col + 1)]
-            for rn in row_nums
+            [rows_dict[er].get(c) for c in range(min_col, max_col + 1)]
+            for er in sorted_excel_rows
         ]
         blocks.append({'name': block_name, 'rowNums': row_nums, 'rows': rows})
 
