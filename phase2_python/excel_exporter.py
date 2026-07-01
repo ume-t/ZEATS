@@ -76,6 +76,8 @@ def export_excel(data: dict, output_path: str) -> None:
             # 座席行
             for row_seats in block['rows']:
                 for col_i, seat_id in enumerate(row_seats, start=1):
+                    if seat_id is None:
+                        continue  # 空きセルはスキップ
                     seat_info = seats.get(seat_id, {})
                     cell = ws.cell(
                         row=current_row,

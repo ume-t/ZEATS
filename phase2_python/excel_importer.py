@@ -269,6 +269,7 @@ def _parse_sheet(ws, short_name: str,
             seats[seat_id] = {
                 'categoryId': channel_id,
                 'ticketNo':   None,
+                '_col':       cell.column,  # Excelの列位置（グリッド配置用・出力時に除去）
             }
 
     return seats
@@ -278,23 +279,27 @@ def _generate_blocks(seats: dict, short_name: str) -> list[dict]:
     """
     seats辞書からブロック別の表示構造を生成する。
 
+    各行は Excel の列位置を基準にした 2D グリッド。
+    空きセルは None で表現し、Excel の座席配置をそのまま反映する。
+
     戻り値:
-      [ { "name": block_name,
-          "rows": [ [seat_id, ...], ... ]  # 行順・座席番号降順
+      [ { "name":    block_name,
+          "rowNums": [row_num, ...],          # 行の「N列」番号
+          "rows":    [ [seat_id|None, ...] ]  # Excelの列順（空き=None）
         }, ... ]
     """
     prefix = short_name + '_'
-    block_rows: dict[str, dict[int, list]] = {}
+    # block_rows[block][row_num][col] = seat_id
+    block_rows: dict[str, dict[int, dict[int, str]]] = {}
 
-    for seat_id in seats:
+    for seat_id, seat_info in seats.items():
         rest = seat_id[len(prefix):]
         m = re.search(r'^(.+)_(\d+)列_(\d+)番$', rest)
         if not m:
             continue
-        block, row_num, seat_num = m.group(1), int(m.group(2)), int(m.group(3))
-        block_rows.setdefault(block, {}).setdefault(row_num, []).append(
-            (seat_num, seat_id)
-        )
+        block, row_num = m.group(1), int(m.group(2))
+        col = seat_info.get('_col', 0)
+        block_rows.setdefault(block, {}).setdefault(row_num, {})[col] = seat_id
 
     def _natural_key(s: str):
         return [int(t) if t.isdigit() else t for t in re.split(r'(\d+)', s)]
@@ -302,11 +307,17 @@ def _generate_blocks(seats: dict, short_name: str) -> list[dict]:
     blocks = []
     for block_name in sorted(block_rows, key=_natural_key):
         rows_dict = block_rows[block_name]
+        # ブロック内の全列範囲
+        all_cols = [c for row in rows_dict.values() for c in row]
+        if not all_cols:
+            continue
+        min_col, max_col = min(all_cols), max(all_cols)
+        row_nums = sorted(rows_dict)
         rows = [
-            [sid for _, sid in sorted(rows_dict[r], reverse=True)]
-            for r in sorted(rows_dict)
+            [rows_dict[rn].get(c) for c in range(min_col, max_col + 1)]
+            for rn in row_nums
         ]
-        blocks.append({'name': block_name, 'rows': rows})
+        blocks.append({'name': block_name, 'rowNums': row_nums, 'rows': rows})
 
     return blocks
 
@@ -385,10 +396,16 @@ def parse_excel(filepath: str) -> dict:
             continue  # 座席0件のシート（全体図・旧バージョンシート等）はスキップ
         blocks = _generate_blocks(seats, short_name)
 
+        # _col など内部フィールドを除去して公開用 seats を作成
+        public_seats = {
+            sid: {'categoryId': s['categoryId'], 'ticketNo': s['ticketNo']}
+            for sid, s in seats.items()
+        }
+
         result['sheets'][sheet_name] = {
             'name':      sheet_name,
             'shortName': short_name,
-            'seats':     seats,
+            'seats':     public_seats,
             'blocks':    blocks,
         }
 

@@ -313,15 +313,22 @@ function renderBlockView(filterText = '') {
 
       const lbl = document.createElement('span');
       lbl.className = 'block-row-label';
-      lbl.textContent = `${rIdx + 1}列`;
+      lbl.textContent = `${block.rowNums?.[rIdx] ?? (rIdx + 1)}列`;
       rowEl.appendChild(lbl);
 
       rowSeats.forEach(seatId => {
+        // null = Excelの空きセル
+        if (seatId === null) {
+          const emptyEl = document.createElement('div');
+          emptyEl.className = 'block-seat block-seat--empty';
+          rowEl.appendChild(emptyEl);
+          return;
+        }
+
         const seatEl = document.createElement('div');
         seatEl.className = 'block-seat';
         seatEl.dataset.seatId = seatId;
 
-        // 座席番号だけ表示（末尾の番号を抽出）
         const num = seatId.match(/_(\d+)番$/)?.[1] || '';
         seatEl.textContent = num;
         seatEl.title = seatId;
