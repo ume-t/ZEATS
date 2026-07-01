@@ -450,6 +450,9 @@ body {
   text-align: right;
 }
 
+/* チケット番号機能は停止中（Issue #20） */
+#ticket-panel { display: none; }
+
 #ticket-format { display: flex; flex-direction: column; gap: 7px; margin-bottom: 9px; }
 
 #ticket-format label {
