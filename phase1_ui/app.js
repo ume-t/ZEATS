@@ -731,6 +731,7 @@ async function importExcelFromServer(file, serverUrl) {
     if (!data.version || !data.sheets || !data.categories) throw new Error('フォーマット不正');
 
     CATEGORIES = data.categories;
+    console.log('[import] categories:', CATEGORIES.map(c => `${c.id}(${c.color || 'no-color'})`));
     initCategories();
     if (!CATEGORIES.find(c => c.id === state.activeCategoryId)) {
       state.activeCategoryId = CATEGORIES[0]?.id || null;
@@ -739,6 +740,9 @@ async function importExcelFromServer(file, serverUrl) {
     state.sheetsData       = data.sheets;
     state.activeSheetName  = Object.keys(data.sheets)[0];
     state.activeSeatsDirty = {};
+    const firstSheet = state.sheetsData[state.activeSheetName];
+    const assignedCount = Object.values(firstSheet?.seats || {}).filter(s => s.categoryId).length;
+    console.log('[import] sheet:', state.activeSheetName, '/ seats:', Object.keys(firstSheet?.seats || {}).length, '/ assigned:', assignedCount);
     if (data.ticketConfig) {
       document.getElementById('ticket-prefix').value = data.ticketConfig.prefix || 'A';
       document.getElementById('ticket-start').value  = data.ticketConfig.startNum || 1;

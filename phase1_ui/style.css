@@ -222,6 +222,7 @@ body {
   font-size: 14px;
 }
 #empty-state.hidden { display: none; }
+#grid-mode.hidden   { display: none; }
 
 #seat-grid {
   display: grid;
