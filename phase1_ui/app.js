@@ -26,6 +26,71 @@ function buildDefaultLayout() {
 }
 
 // ──────────────────────────────────────────────
+// ドラッグ塗り状態
+// ──────────────────────────────────────────────
+const dragPaint = {
+  active: false,
+  action: null, // 'assign' | 'erase'
+};
+
+// Shift+クリック範囲選択のアンカー
+let shiftAnchor = { seatId: null, action: null };
+
+// Undo / Redo スタック
+const undoStack = [];
+const redoStack = [];
+const UNDO_MAX  = 50;
+let gestureSnapshot = null;
+
+function takeSnapshot() {
+  const src = state.mode === 'import' ? state.activeSeatsDirty : state.seats;
+  return Object.fromEntries(Object.entries(src).map(([k, v]) => [k, { ...v }]));
+}
+
+function pushUndo(before) {
+  if (JSON.stringify(before) === JSON.stringify(takeSnapshot())) return;
+  undoStack.push(before);
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack.length = 0; // 新しい操作で Redo 履歴をクリア
+  updateHistoryButtons();
+}
+
+function updateHistoryButtons() {
+  const u = document.getElementById('btn-undo');
+  const r = document.getElementById('btn-redo');
+  if (u) u.disabled = undoStack.length === 0;
+  if (r) r.disabled = redoStack.length === 0;
+}
+
+function restoreSnapshot(snapshot) {
+  if (state.mode === 'import') {
+    state.activeSeatsDirty = snapshot;
+    renderBlockView(document.getElementById('block-search').value);
+  } else {
+    state.seats = snapshot;
+    document.querySelectorAll('.seat[data-seat-id]').forEach(cell =>
+      applyGridSeatStyle(cell, cell.dataset.seatId)
+    );
+  }
+  renderSummary();
+  updateHistoryButtons();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(takeSnapshot());
+  restoreSnapshot(undoStack.pop());
+  showToast('1つ戻りました');
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(takeSnapshot());
+  restoreSnapshot(redoStack.pop());
+  showToast('1つ進みました');
+}
+
+// ──────────────────────────────────────────────
 // アプリ状態
 // ──────────────────────────────────────────────
 const state = {
@@ -66,9 +131,10 @@ function initCategories() {
     btn.className = 'cat-btn';
     btn.dataset.catId = cat.id;
     btn.textContent = cat.name;
-    btn.style.backgroundColor = cat.color;
+    applyCatBtnColor(btn, cat.color);
     if (cat.id === state.activeCategoryId) btn.classList.add('active');
     btn.addEventListener('click', () => setActiveCategory(cat.id));
+    btn.addEventListener('dblclick', e => { e.stopPropagation(); openColorPicker(cat.id, btn); });
     container.appendChild(btn);
   });
 
@@ -79,6 +145,55 @@ function initCategories() {
   eraseBtn.style.backgroundColor = '#555';
   eraseBtn.addEventListener('click', () => setActiveCategory('__erase__'));
   container.appendChild(eraseBtn);
+}
+
+function applyCatBtnColor(btn, color) {
+  if (color) {
+    btn.style.backgroundColor = color;
+    btn.classList.remove('cat-btn--no-color');
+  } else {
+    btn.style.backgroundColor = '#555';
+    btn.classList.add('cat-btn--no-color');
+  }
+}
+
+function openColorPicker(catId, anchorBtn) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  if (!cat) return;
+
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.value = cat.color || '#888888';
+  Object.assign(input.style, { position: 'fixed', opacity: '0', pointerEvents: 'none' });
+  document.body.appendChild(input);
+
+  input.addEventListener('input', e => updateCategoryColor(catId, e.target.value));
+  input.addEventListener('change', e => {
+    updateCategoryColor(catId, e.target.value);
+    document.body.removeChild(input);
+  });
+  // キャンセル（ESCなど）でも要素を除去
+  input.addEventListener('cancel', () => document.body.removeChild(input));
+  input.click();
+}
+
+function updateCategoryColor(catId, color) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  if (!cat) return;
+  cat.color = color;
+
+  const btn = document.querySelector(`.cat-btn[data-cat-id="${CSS.escape(catId)}"]`);
+  if (btn) applyCatBtnColor(btn, color);
+
+  renderSummary();
+
+  if (state.mode === 'import') {
+    renderBlockView(document.getElementById('block-search').value);
+  } else {
+    document.querySelectorAll('.seat[data-seat-id]').forEach(cell =>
+      applyGridSeatStyle(cell, cell.dataset.seatId)
+    );
+  }
 }
 
 function setActiveCategory(id) {
@@ -155,6 +270,9 @@ function renderSheetTabs() {
 function switchSheet(name) {
   state.activeSheetName = name;
   state.activeSeatsDirty = {};
+  undoStack.length = 0;
+  redoStack.length = 0;
+  updateHistoryButtons();
   renderSheetTabs();
   renderBlockView();
   renderSummary();
@@ -210,7 +328,28 @@ function renderBlockView(filterText = '') {
 
         applyBlockSeatStyle(seatEl, seatId, seats);
 
-        seatEl.addEventListener('click', () => onBlockSeatClick(seatId, seatEl));
+        seatEl.addEventListener('mousedown', e => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          hideContextMenu();
+          gestureSnapshot = takeSnapshot();
+          if (e.shiftKey && shiftAnchor.seatId) {
+            applyShiftRangeBlock(shiftAnchor.seatId, seatId, shiftAnchor.action);
+            pushUndo(gestureSnapshot);
+            return;
+          }
+          const s = currentSeats();
+          const action = (state.activeCategoryId === '__erase__' || s[seatId]?.categoryId)
+            ? 'erase' : 'assign';
+          dragPaint.action = action;
+          dragPaint.active = true;
+          shiftAnchor = { seatId, action };
+          applyDragBlock(seatId, seatEl);
+        });
+        seatEl.addEventListener('mouseover', () => {
+          if (!dragPaint.active) return;
+          applyDragBlock(seatId, seatEl);
+        });
         seatEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, seatId, seatEl, true); });
         rowEl.appendChild(seatEl);
       });
@@ -226,7 +365,8 @@ function applyBlockSeatStyle(el, seatId, seats) {
   const seat = seats[seatId];
   if (seat && seat.categoryId) {
     const cat = CATEGORIES.find(c => c.id === seat.categoryId);
-    el.style.backgroundColor = cat ? cat.color : '#2a2a4a';
+    const color = cat?.color || '#888';
+    el.style.backgroundColor = color;
     el.style.borderColor = 'transparent';
     el.style.color = 'rgba(0,0,0,0.75)';
   } else {
@@ -236,14 +376,26 @@ function applyBlockSeatStyle(el, seatId, seats) {
   }
 }
 
-function onBlockSeatClick(seatId, el) {
-  hideContextMenu();
-  if (state.activeCategoryId === '__erase__') {
+function applyDragBlock(seatId, el) {
+  if (dragPaint.action === 'erase') {
     eraseSeat(seatId);
   } else {
     setSeat(seatId, state.activeCategoryId);
   }
   applyBlockSeatStyle(el, seatId, currentSeats());
+}
+
+function applyShiftRangeBlock(fromId, toId, action) {
+  const all = [...document.querySelectorAll('#block-cards .block-seat[data-seat-id]')];
+  const fi = all.findIndex(el => el.dataset.seatId === fromId);
+  const ti = all.findIndex(el => el.dataset.seatId === toId);
+  if (fi === -1 || ti === -1) return;
+  const [lo, hi] = [Math.min(fi, ti), Math.max(fi, ti)];
+  all.slice(lo, hi + 1).forEach(el => {
+    const sid = el.dataset.seatId;
+    if (action === 'erase') eraseSeat(sid); else setSeat(sid, state.activeCategoryId);
+    applyBlockSeatStyle(el, sid, currentSeats());
+  });
   renderSummary();
 }
 
@@ -270,7 +422,27 @@ function renderGrid() {
         cell.className = 'seat';
         cell.dataset.seatId = seatId;
         applyGridSeatStyle(cell, seatId);
-        cell.addEventListener('click', () => onGridSeatClick(seatId, cell));
+        cell.addEventListener('mousedown', e => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          hideContextMenu();
+          gestureSnapshot = takeSnapshot();
+          if (e.shiftKey && shiftAnchor.seatId) {
+            applyShiftRangeGrid(shiftAnchor.seatId, seatId, shiftAnchor.action);
+            pushUndo(gestureSnapshot);
+            return;
+          }
+          const action = (state.activeCategoryId === '__erase__' || state.seats[seatId]?.categoryId)
+            ? 'erase' : 'assign';
+          dragPaint.action = action;
+          dragPaint.active = true;
+          shiftAnchor = { seatId, action };
+          applyDragGrid(seatId, cell);
+        });
+        cell.addEventListener('mouseover', () => {
+          if (!dragPaint.active) return;
+          applyDragGrid(seatId, cell);
+        });
         cell.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, seatId, cell, false); });
       }
       grid.appendChild(cell);
@@ -282,7 +454,8 @@ function applyGridSeatStyle(cell, seatId) {
   const seat = state.seats[seatId];
   if (seat && seat.categoryId) {
     const cat = CATEGORIES.find(c => c.id === seat.categoryId);
-    cell.style.backgroundColor = cat ? cat.color : '#2a2a4a';
+    const color = cat?.color || '#888';
+    cell.style.backgroundColor = color;
     cell.style.borderColor = 'transparent';
     cell.textContent = seat.ticketNo || seatId;
     cell.style.color = 'rgba(0,0,0,0.75)';
@@ -294,14 +467,26 @@ function applyGridSeatStyle(cell, seatId) {
   }
 }
 
-function onGridSeatClick(seatId, cell) {
-  hideContextMenu();
-  if (state.activeCategoryId === '__erase__') {
+function applyDragGrid(seatId, cell) {
+  if (dragPaint.action === 'erase') {
     eraseSeat(seatId);
   } else {
     setSeat(seatId, state.activeCategoryId);
   }
   applyGridSeatStyle(cell, seatId);
+}
+
+function applyShiftRangeGrid(fromId, toId, action) {
+  const all = [...document.querySelectorAll('#seat-grid .seat[data-seat-id]')];
+  const fi = all.findIndex(el => el.dataset.seatId === fromId);
+  const ti = all.findIndex(el => el.dataset.seatId === toId);
+  if (fi === -1 || ti === -1) return;
+  const [lo, hi] = [Math.min(fi, ti), Math.max(fi, ti)];
+  all.slice(lo, hi + 1).forEach(el => {
+    const sid = el.dataset.seatId;
+    if (action === 'erase') eraseSeat(sid); else setSeat(sid, state.activeCategoryId);
+    applyGridSeatStyle(el, sid);
+  });
   renderSummary();
 }
 
@@ -317,7 +502,7 @@ function showContextMenu(x, y, seatId, el, isBlock) {
     const li = document.createElement('li');
     const dot = document.createElement('span');
     dot.className = 'ctx-color-dot';
-    dot.style.backgroundColor = cat.color;
+    dot.style.backgroundColor = cat.color || '#888';
     li.appendChild(dot);
     li.appendChild(document.createTextNode(cat.name));
     li.addEventListener('click', () => {
@@ -352,7 +537,11 @@ function hideContextMenu() {
 }
 
 document.addEventListener('click', hideContextMenu);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') hideContextMenu(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') hideContextMenu();
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+});
 
 // ──────────────────────────────────────────────
 // 集計パネル
@@ -388,7 +577,7 @@ function renderSummary() {
     const row = document.createElement('div');
     row.className = 'summary-row';
     row.innerHTML = `
-      <div class="summary-color-dot" style="background:${cat.color}"></div>
+      <div class="summary-color-dot" style="background:${cat.color || '#888'}"></div>
       <span class="summary-name">${cat.name}</span>
       <span class="summary-count">${counts[cat.id] || 0}</span>
     `;
@@ -581,6 +770,19 @@ function importWorkJSON(file) {
 // ボタンバインド
 // ──────────────────────────────────────────────
 function bindActions() {
+  // ドラッグ塗りの終了（どこでマウスを離しても集計を更新）
+  document.addEventListener('mouseup', () => {
+    if (!dragPaint.active) return;
+    dragPaint.active = false;
+    dragPaint.action = null;
+    pushUndo(gestureSnapshot);
+    gestureSnapshot = null;
+    renderSummary();
+  });
+
+  document.getElementById('btn-undo').addEventListener('click', undo);
+  document.getElementById('btn-redo').addEventListener('click', redo);
+
   document.getElementById('btn-reset-all').addEventListener('click', () => {
     if (!confirm('全ての区分・チケット番号をリセットしますか？')) return;
     if (state.mode === 'import') {
@@ -640,6 +842,9 @@ function bindElectronButtons(serverUrl) {
     if (file) await importExcelFromServer(file, serverUrl);
   });
 
+  document.getElementById('btn-save-colors').addEventListener('click', () =>
+    saveColorsToExcel(serverUrl)
+  );
   document.getElementById('btn-export-excel').addEventListener('click', () =>
     exportFromServer(serverUrl, 'excel')
   );
@@ -727,13 +932,54 @@ async function exportFromServer(serverUrl, type) {
   }
 }
 
+async function saveColorsToExcel(serverUrl) {
+  if (state.mode !== 'import') {
+    alert('区分色のExcel保存はExcelインポートモードでのみ使用できます。\nまず「Excelを直接インポート」でファイルを読み込んでください。');
+    return;
+  }
+  const colors = {};
+  CATEGORIES.forEach(cat => {
+    if (cat.color) colors[cat.id] = cat.color;
+  });
+  if (Object.keys(colors).length === 0) {
+    alert('色が設定されている区分がありません。\n区分ボタンをダブルクリックして色を設定してください。');
+    return;
+  }
+  try {
+    showToast('区分色をExcelに保存中...');
+    const res = await fetch(`${serverUrl}/save-colors`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ colors }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const blob        = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match       = disposition.match(/filename="?([^"]+)"?/);
+    const filename    = match ? match[1] : 'colors.xlsx';
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('区分色をExcelに保存しました');
+  } catch (err) {
+    showToast('保存失敗: ' + err.message, 5000);
+    console.error('saveColorsToExcel error:', err);
+  }
+}
+
 // ──────────────────────────────────────────────
 // トースト
 // ──────────────────────────────────────────────
-function showToast(msg) {
+function showToast(msg, duration = 2500) {
   const toast = document.getElementById('toast');
   toast.textContent = msg;
   toast.classList.remove('hidden');
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.add('hidden'), 2500);
+  toast._timer = setTimeout(() => toast.classList.add('hidden'), duration);
 }

@@ -13,9 +13,12 @@
     <div id="controls">
       <div id="category-panel">
         <span class="panel-label">区分選択：</span>
+        <span class="help-icon" aria-label="操作説明">?<span class="help-tooltip">【区分ボタン】&#10;クリック：区分を選択&#10;ダブルクリック：色を変更&#10;&#10;【座席】&#10;クリック（空席）：選択中の区分を割り当て&#10;クリック（色あり）：割り当てを消去&#10;ドラッグ：複数席を一括塗り/消去&#10;Shift+クリック：最初と最後の間を一括塗り/消去</span></span>
         <div id="category-buttons"></div>
       </div>
       <div id="action-buttons">
+        <button id="btn-undo" disabled>1つ戻る</button>
+        <button id="btn-redo" disabled>1つ進む</button>
         <button id="btn-reset-all">全リセット</button>
         <button id="btn-export">JSON出力</button>
         <button id="btn-import-json">Excelから変換したJSONを読込</button>
@@ -26,6 +29,7 @@
         <span id="electron-buttons" style="display:none">
           <button id="btn-import-excel-direct">Excelを直接インポート</button>
           <input type="file" id="import-excel-direct-input" accept=".xlsx,.xls" style="display:none">
+          <button id="btn-save-colors">区分色をExcelに保存</button>
           <button id="btn-export-excel">Excel出力</button>
           <button id="btn-export-pdf">PDF出力</button>
         </span>
