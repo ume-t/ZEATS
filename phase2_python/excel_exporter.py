@@ -23,6 +23,8 @@ _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 _HEADER_FONT = Font(bold=True)
 _CELL_ALIGN = Alignment(horizontal='center', vertical='center')
 
+_CATEGORY_SHEET_NAME = '区分'
+
 
 def _argb(hex_color: str) -> str:
     """'#RRGGBB' → 'FFRRGGBB'（openpyxlのARGB形式）"""
@@ -39,6 +41,35 @@ def _seat_label(seat_id: str, seat_info: dict) -> str:
     """セルに表示するテキスト。チケット番号 > 座席番号の優先順。"""
     ticket = seat_info.get('ticketNo')
     return ticket if ticket else _seat_number(seat_id)
+
+
+def _add_category_sheet(wb: openpyxl.Workbook, categories: list) -> None:
+    """「区分」シートをワークブックに追加（既存なら上書き）。"""
+    if _CATEGORY_SHEET_NAME in wb.sheetnames:
+        del wb[_CATEGORY_SHEET_NAME]
+    ws = wb.create_sheet(title=_CATEGORY_SHEET_NAME)
+
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 22
+    ws.column_dimensions['C'].width = 12
+
+    for hdr, col in (('区分ID', 1), ('区分名', 2), ('色コード', 3)):
+        c = ws.cell(row=1, column=col, value=hdr)
+        c.font = _HEADER_FONT
+
+    for r, cat in enumerate(categories, start=2):
+        cat_id    = cat.get('id', '')
+        cat_name  = cat.get('name', cat_id)
+        hex_color = cat.get('color')
+
+        ws.cell(row=r, column=1, value=cat_id)
+        ws.cell(row=r, column=2, value=cat_name)
+        ws.cell(row=r, column=3, value=hex_color or '')
+
+        if hex_color:
+            fill = PatternFill(fill_type='solid', fgColor=_argb(hex_color))
+            for col in (1, 2):
+                ws.cell(row=r, column=col).fill = fill
 
 
 def export_excel(data: dict, output_path: str) -> None:
@@ -95,6 +126,7 @@ def export_excel(data: dict, output_path: str) -> None:
 
             current_row += 1  # ブロック間の空白行
 
+    _add_category_sheet(wb, data.get('categories', []))
     wb.save(output_path)
     print(f"Excel出力: {output_path}")
 
