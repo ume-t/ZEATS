@@ -548,6 +548,58 @@ body {
   flex-shrink: 0;
 }
 
+/* ── 区分色プリセットポップオーバー ── */
+#color-preset-popover {
+  position: fixed;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  z-index: 1000;
+  padding: 10px;
+}
+
+#color-preset-popover.hidden { display: none; }
+
+#color-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.color-preset-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.08s;
+}
+
+.color-preset-swatch:hover { transform: scale(1.15); }
+
+.color-preset-swatch.active {
+  border-color: #fff;
+  box-shadow: 0 0 6px rgba(255,255,255,0.6);
+}
+
+#color-preset-custom {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  background: #0f3460;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+#color-preset-custom:hover { background: #1a4a8a; }
+
 /* ── トースト ── */
 #toast {
   position: fixed;

@@ -13,6 +13,16 @@ let CATEGORIES = [
 ];
 
 // ──────────────────────────────────────────────
+// 区分色プリセット（要ヒアリング。ひとまず定番の配色を用意）
+// ──────────────────────────────────────────────
+const COLOR_PRESETS = [
+  '#e74c3c', '#c0392b', '#e67e22', '#d35400',
+  '#f1c40f', '#f39c12', '#2ecc71', '#27ae60',
+  '#1abc9c', '#16a085', '#3498db', '#2980b9',
+  '#9b59b6', '#8e44ad', '#34495e', '#7f8c8d',
+];
+
+// ──────────────────────────────────────────────
 // 初期座席レイアウト（手動モード用・仮データ）
 // null = 通路, 文字列 = 座席ID
 // ──────────────────────────────────────────────
@@ -134,7 +144,7 @@ function initCategories() {
     applyCatBtnColor(btn, cat.color);
     if (cat.id === state.activeCategoryId) btn.classList.add('active');
     btn.addEventListener('click', () => setActiveCategory(cat.id));
-    btn.addEventListener('dblclick', e => { e.stopPropagation(); openColorPicker(cat.id, btn); });
+    btn.addEventListener('dblclick', e => { e.stopPropagation(); openColorPresetPopover(cat.id, btn); });
     container.appendChild(btn);
   });
 
@@ -155,6 +165,42 @@ function applyCatBtnColor(btn, color) {
     btn.style.backgroundColor = '#555';
     btn.classList.add('cat-btn--no-color');
   }
+}
+
+function openColorPresetPopover(catId, anchorBtn) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  if (!cat) return;
+
+  const popover = document.getElementById('color-preset-popover');
+  const grid    = document.getElementById('color-preset-grid');
+  grid.innerHTML = '';
+
+  COLOR_PRESETS.forEach(color => {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'color-preset-swatch' + (cat.color === color ? ' active' : '');
+    swatch.style.backgroundColor = color;
+    swatch.title = color;
+    swatch.addEventListener('click', () => {
+      updateCategoryColor(catId, color);
+      hideColorPresetPopover();
+    });
+    grid.appendChild(swatch);
+  });
+
+  document.getElementById('color-preset-custom').onclick = () => {
+    hideColorPresetPopover();
+    openColorPicker(catId, anchorBtn);
+  };
+
+  const rect = anchorBtn.getBoundingClientRect();
+  popover.style.left = `${Math.min(rect.left, window.innerWidth - 130)}px`;
+  popover.style.top  = `${rect.bottom + 4}px`;
+  popover.classList.remove('hidden');
+}
+
+function hideColorPresetPopover() {
+  document.getElementById('color-preset-popover').classList.add('hidden');
 }
 
 function openColorPicker(catId, anchorBtn) {
@@ -572,9 +618,14 @@ function hideContextMenu() {
   document.getElementById('context-menu').classList.add('hidden');
 }
 
-document.addEventListener('click', hideContextMenu);
+document.addEventListener('click', e => {
+  hideContextMenu();
+  if (!e.target.closest('#color-preset-popover') && !e.target.closest('.cat-btn')) {
+    hideColorPresetPopover();
+  }
+});
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') hideContextMenu();
+  if (e.key === 'Escape') { hideContextMenu(); hideColorPresetPopover(); }
   if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
   if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
 });
