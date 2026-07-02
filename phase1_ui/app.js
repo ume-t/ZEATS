@@ -108,6 +108,7 @@ const state = {
 
   // --- 共通 ---
   activeCategoryId: CATEGORIES[0].id,
+  zoomLevel: 1,
 };
 
 // ──────────────────────────────────────────────
@@ -677,6 +678,23 @@ function assignTickets() {
 }
 
 // ──────────────────────────────────────────────
+// ズーム
+// ──────────────────────────────────────────────
+const ZOOM_MIN  = 0.5;
+const ZOOM_MAX  = 2;
+const ZOOM_STEP = 0.1;
+
+function applyZoom() {
+  document.getElementById('layout-area').style.zoom = state.zoomLevel;
+  document.getElementById('zoom-level').textContent = `${Math.round(state.zoomLevel * 100)}%`;
+}
+
+function setZoom(level) {
+  state.zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(level * 100) / 100));
+  applyZoom();
+}
+
+// ──────────────────────────────────────────────
 // ボタンバインド
 // ──────────────────────────────────────────────
 function bindActions() {
@@ -689,6 +707,9 @@ function bindActions() {
     gestureSnapshot = null;
     renderSummary();
   });
+
+  document.getElementById('btn-zoom-in').addEventListener('click', () => setZoom(state.zoomLevel + ZOOM_STEP));
+  document.getElementById('btn-zoom-out').addEventListener('click', () => setZoom(state.zoomLevel - ZOOM_STEP));
 
   document.getElementById('btn-undo').addEventListener('click', undo);
   document.getElementById('btn-redo').addEventListener('click', redo);
