@@ -155,6 +155,22 @@ body {
 
 #action-buttons button:hover { background: #1a4a8a; }
 
+#zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+  margin-right: 4px;
+  border-right: 1px solid #0f3460;
+}
+
+#zoom-level {
+  font-size: 11px;
+  color: #aaa;
+  min-width: 34px;
+  text-align: center;
+}
+
 /* ── シートタブ ── */
 #sheet-tabs {
   display: flex;
