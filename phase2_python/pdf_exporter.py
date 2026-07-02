@@ -65,7 +65,7 @@ def _draw_legend(c: canvas.Canvas, categories: list[dict],
     for cat in categories:
         if cx + item_w > PAGE_W - MARGIN:
             break
-        col = _hex_to_color(cat['color'])
+        col = _hex_to_color(cat['color']) if cat.get('color') else colors.white
         c.setFillColor(col)
         c.rect(cx, y - swatch, swatch, swatch, fill=1, stroke=0)
         c.setFillColor(colors.black)
@@ -92,6 +92,11 @@ def _draw_block(c: canvas.Canvas, block: dict, seats: dict,
     for row_seats in block['rows']:
         cx = x
         for seat_id in row_seats:
+            if seat_id is None:
+                # 空きセル（通路など）: 何も描画せず列位置だけ進める
+                cx += CELL_W
+                continue
+
             seat_info = seats.get(seat_id, {})
             cat_id    = seat_info.get('categoryId')
             label     = _seat_label(seat_id, seat_info)
@@ -130,6 +135,7 @@ def export_pdf(data: dict, output_path: str) -> None:
     cat_colors: dict[str, colors.Color] = {
         cat['id']: _hex_to_color(cat['color'])
         for cat in data.get('categories', [])
+        if cat.get('color')
     }
     categories = data.get('categories', [])
 

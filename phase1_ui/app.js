@@ -43,7 +43,7 @@ const UNDO_MAX  = 50;
 let gestureSnapshot = null;
 
 function takeSnapshot() {
-  const src = state.mode === 'import' ? state.activeSeatsDirty : state.seats;
+  const src = state.mode === 'import' ? activeDirty() : state.seats;
   return Object.fromEntries(Object.entries(src).map(([k, v]) => [k, { ...v }]));
 }
 
@@ -64,7 +64,7 @@ function updateHistoryButtons() {
 
 function restoreSnapshot(snapshot) {
   if (state.mode === 'import') {
-    state.activeSeatsDirty = snapshot;
+    state.dirtyBySheet[state.activeSheetName] = snapshot;
     renderBlockView(document.getElementById('block-search').value);
   } else {
     state.seats = snapshot;
@@ -104,7 +104,7 @@ const state = {
   // --- インポートモード ---
   sheetsData: {},        // { シート名: { name, shortName, seats, blocks } }
   activeSheetName: null,
-  activeSeatsDirty: {},  // インポートモードでの変更 { seatId: { categoryId, ticketNo } }
+  dirtyBySheet: {},      // インポートモードでの変更 { シート名: { seatId: {categoryId, ticketNo} } }
 
   // --- 共通 ---
   activeCategoryId: CATEGORIES[0].id,
@@ -203,12 +203,21 @@ function setActiveCategory(id) {
 }
 
 // ──────────────────────────────────────────────
+// 現在シートの dirty dict を返す（なければ初期化）
+// ──────────────────────────────────────────────
+function activeDirty() {
+  const name = state.activeSheetName;
+  if (!state.dirtyBySheet[name]) state.dirtyBySheet[name] = {};
+  return state.dirtyBySheet[name];
+}
+
+// ──────────────────────────────────────────────
 // 現在のシートの seats を返すヘルパー
 // ──────────────────────────────────────────────
 function currentSeats() {
   if (state.mode === 'import') {
     const base = state.sheetsData[state.activeSheetName]?.seats || {};
-    return { ...base, ...state.activeSeatsDirty };
+    return { ...base, ...activeDirty() };
   }
   return state.seats;
 }
@@ -218,13 +227,13 @@ function currentSeats() {
 // ──────────────────────────────────────────────
 function setSeat(seatId, categoryId) {
   if (state.mode === 'import') {
-    if (!state.activeSeatsDirty[seatId]) {
-      // ベースからコピーして上書き
+    const dirty = activeDirty();
+    if (!dirty[seatId]) {
       const base = state.sheetsData[state.activeSheetName]?.seats?.[seatId] || {};
-      state.activeSeatsDirty[seatId] = { ...base };
+      dirty[seatId] = { ...base };
     }
-    state.activeSeatsDirty[seatId].categoryId = categoryId;
-    state.activeSeatsDirty[seatId].ticketNo   = null;
+    dirty[seatId].categoryId = categoryId;
+    dirty[seatId].ticketNo   = null;
   } else {
     if (!state.seats[seatId]) state.seats[seatId] = {};
     state.seats[seatId].categoryId = categoryId;
@@ -234,7 +243,7 @@ function setSeat(seatId, categoryId) {
 
 function eraseSeat(seatId) {
   if (state.mode === 'import') {
-    state.activeSeatsDirty[seatId] = { categoryId: null, ticketNo: null };
+    activeDirty()[seatId] = { categoryId: null, ticketNo: null };
   } else {
     delete state.seats[seatId];
   }
@@ -269,7 +278,6 @@ function renderSheetTabs() {
 
 function switchSheet(name) {
   state.activeSheetName = name;
-  state.activeSeatsDirty = {};
   undoStack.length = 0;
   redoStack.length = 0;
   updateHistoryButtons();
@@ -298,7 +306,7 @@ function renderBlockView(filterText = '') {
   const container = document.getElementById('block-cards');
   container.innerHTML = '';
 
-  filtered.forEach(block => {
+  function buildBlockCard(block) {
     const card = document.createElement('div');
     card.className = 'block-card';
 
@@ -317,7 +325,6 @@ function renderBlockView(filterText = '') {
       rowEl.appendChild(lbl);
 
       rowSeats.forEach(seatId => {
-        // null = Excelの空きセル
         if (seatId === null) {
           const emptyEl = document.createElement('div');
           emptyEl.className = 'block-seat block-seat--empty';
@@ -357,14 +364,35 @@ function renderBlockView(filterText = '') {
           if (!dragPaint.active) return;
           applyDragBlock(seatId, seatEl);
         });
-        seatEl.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, seatId, seatEl, true); });
+        seatEl.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          showContextMenu(e.clientX, e.clientY, seatId, seatEl, true);
+        });
         rowEl.appendChild(seatEl);
       });
 
       card.appendChild(rowEl);
     });
+    return card;
+  }
 
-    container.appendChild(card);
+  // _tier でグループ化し、Excelの横並び順（_hpos）に並べる
+  const tierMap = new Map();
+  filtered.forEach(block => {
+    const tier = block._tier ?? 0;
+    if (!tierMap.has(tier)) tierMap.set(tier, []);
+    tierMap.get(tier).push(block);
+  });
+
+  [...tierMap.keys()].sort((a, b) => a - b).forEach(tier => {
+    const tierEl = document.createElement('div');
+    tierEl.className = 'block-tier';
+
+    tierMap.get(tier)
+      .sort((a, b) => (a._hpos ?? 0) - (b._hpos ?? 0))
+      .forEach(block => tierEl.appendChild(buildBlockCard(block)));
+
+    container.appendChild(tierEl);
   });
 }
 
@@ -613,10 +641,11 @@ function assignTickets() {
         rowSeats.forEach(seatId => {
           if (seats[seatId]?.categoryId) {
             const ticketNo = `${prefix}${String(num).padStart(3, '0')}`;
-            if (!state.activeSeatsDirty[seatId]) {
-              state.activeSeatsDirty[seatId] = { ...seats[seatId] };
+            const dirty = activeDirty();
+            if (!dirty[seatId]) {
+              dirty[seatId] = { ...seats[seatId] };
             }
-            state.activeSeatsDirty[seatId].ticketNo = ticketNo;
+            dirty[seatId].ticketNo = ticketNo;
             preview.push(`${seatId} → ${ticketNo}`);
             num++;
           }
@@ -673,7 +702,7 @@ function bindActions() {
     if (state.mode === 'import') {
       // ベースの全座席に categoryId: null を上書きするdirtyを作成
       const allSeats = state.sheetsData[state.activeSheetName]?.seats || {};
-      state.activeSeatsDirty = Object.fromEntries(
+      state.dirtyBySheet[state.activeSheetName] = Object.fromEntries(
         Object.keys(allSeats).map(id => [id, { categoryId: null, ticketNo: null }])
       );
       renderBlockView(document.getElementById('block-search').value);
@@ -713,9 +742,6 @@ function bindElectronButtons(serverUrl) {
     if (file) await importExcelFromServer(file, serverUrl);
   });
 
-  document.getElementById('btn-save-colors').addEventListener('click', () =>
-    saveColorsToExcel(serverUrl)
-  );
   document.getElementById('btn-export-excel').addEventListener('click', () =>
     exportFromServer(serverUrl, 'excel')
   );
@@ -743,9 +769,9 @@ async function importExcelFromServer(file, serverUrl) {
       state.activeCategoryId = CATEGORIES[0]?.id || null;
       setActiveCategory(state.activeCategoryId);
     }
-    state.sheetsData       = data.sheets;
-    state.activeSheetName  = Object.keys(data.sheets)[0];
-    state.activeSeatsDirty = {};
+    state.sheetsData      = data.sheets;
+    state.activeSheetName = Object.keys(data.sheets)[0];
+    state.dirtyBySheet    = {};
     if (data.ticketConfig) {
       document.getElementById('ticket-prefix').value = data.ticketConfig.prefix || 'A';
       document.getElementById('ticket-start').value  = data.ticketConfig.startNum || 1;
@@ -774,9 +800,7 @@ async function exportFromServer(serverUrl, type) {
 
     const mergedSheets = {};
     Object.entries(state.sheetsData).forEach(([name, sheet]) => {
-      const mergedSeats = name === state.activeSheetName
-        ? { ...sheet.seats, ...state.activeSeatsDirty }
-        : { ...sheet.seats };
+      const mergedSeats = { ...sheet.seats, ...(state.dirtyBySheet[name] || {}) };
       mergedSheets[name] = { ...sheet, seats: mergedSeats };
     });
     const payload = { version: 1, categories: CATEGORIES, sheets: mergedSheets };
@@ -800,47 +824,6 @@ async function exportFromServer(serverUrl, type) {
     showToast(`${label}を出力しました`);
   } catch (err) {
     alert(`出力に失敗しました: ${err.message}`);
-  }
-}
-
-async function saveColorsToExcel(serverUrl) {
-  if (state.mode !== 'import') {
-    alert('区分色のExcel保存はExcelインポートモードでのみ使用できます。\nまず「Excelを直接インポート」でファイルを読み込んでください。');
-    return;
-  }
-  const colors = {};
-  CATEGORIES.forEach(cat => {
-    if (cat.color) colors[cat.id] = cat.color;
-  });
-  if (Object.keys(colors).length === 0) {
-    alert('色が設定されている区分がありません。\n区分ボタンをダブルクリックして色を設定してください。');
-    return;
-  }
-  try {
-    showToast('区分色をExcelに保存中...');
-    const res = await fetch(`${serverUrl}/save-colors`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ colors }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `HTTP ${res.status}`);
-    }
-    const blob        = await res.blob();
-    const disposition = res.headers.get('Content-Disposition') || '';
-    const match       = disposition.match(/filename="?([^"]+)"?/);
-    const filename    = match ? match[1] : 'colors.xlsx';
-    const url = URL.createObjectURL(blob);
-    const a   = document.createElement('a');
-    a.href     = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('区分色をExcelに保存しました');
-  } catch (err) {
-    showToast('保存失敗: ' + err.message, 5000);
-    console.error('saveColorsToExcel error:', err);
   }
 }
 

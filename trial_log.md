@@ -5,6 +5,24 @@
 
 ---
 
+## 2026-07-01 — セッション12
+
+### やったこと
+- **Issue #11 実装・Close**: Excel書き出し時に「区分」シートを追加
+  - `excel_exporter.py` / `seat_colorizer.py` に `_add_category_sheet()` を追加
+  - 区分ID・区分名・色コードの3列、色付き背景セル
+  - `export_excel()` と `apply_seat_and_legend_colors()` 両経路に対応
+- **PR #17 マージ**: dev → main（Issue #11〜#16 全完了）
+
+### 結果
+- Excel出力ファイルに「区分」シートが含まれることをユーザーが確認済み
+- オープン Issue ゼロ
+
+### 次のアクション
+- 新規 Issue があれば着手。なければ次フェーズ（Phase 3: Electron化）の検討
+
+---
+
 ## 2026-07-01 — セッション11
 
 ### やったこと

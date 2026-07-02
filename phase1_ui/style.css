@@ -239,12 +239,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: bold;
   color: rgba(0,0,0,0.7);
   background: #2a2a4a;
   transition: transform 0.08s, box-shadow 0.08s;
   position: relative;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .seat:hover {
@@ -271,7 +273,7 @@ body {
 }
 
 /* ── ブロックモード（Excelインポート時） ── */
-#block-mode { flex-direction: column; gap: 12px; }
+#block-mode { flex-direction: column; gap: 12px; min-width: max-content; }
 #block-mode.hidden { display: none; }
 
 #block-search-bar {
@@ -300,9 +302,15 @@ body {
 
 #block-cards {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  gap: 16px;
   user-select: none;
+}
+
+.block-tier {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
 }
 
 .block-card {
@@ -312,7 +320,6 @@ body {
   padding: 10px 12px;
   min-width: 180px;
   flex: 0 0 auto;
-  overflow-x: auto;
 }
 
 .block-card-name {
@@ -349,12 +356,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7px;
+  font-size: 8px;
   font-weight: bold;
   color: rgba(0,0,0,0.7);
   background: #2a2a4a;
   transition: transform 0.08s, box-shadow 0.08s;
   position: relative;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .block-seat--empty {
@@ -440,6 +449,9 @@ body {
   color: #aaa;
   text-align: right;
 }
+
+/* チケット番号機能は停止中（Issue #20） */
+#ticket-panel { display: none; }
 
 #ticket-format { display: flex; flex-direction: column; gap: 7px; margin-bottom: 9px; }
 
